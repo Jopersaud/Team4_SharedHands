@@ -15,7 +15,7 @@ export default function RegisterPage() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (formData.password !== formData.confirmPassword) {
@@ -23,11 +23,31 @@ export default function RegisterPage() {
       return;
     }
 
-    // Placeholder for future Flask POST /register
-    console.log("Register user:", formData);
+    try {
+      const response = await fetch("http://127.0.0.1:5000/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: formData.username,
+          email: formData.email,
+          password: formData.password, // Note: In a real app, never send plain text passwords
+        }),
+      });
 
-    alert("Account created successfully!");
-    navigate("/");
+      const data = await response.json();
+
+      if (data.success) {
+        alert("Account created successfully!");
+        navigate("/");
+      } else {
+        alert("Error creating account: " + data.error);
+      }
+    } catch (error) {
+      console.error("Registration error:", error);
+      alert("There was an error creating your account.");
+    }
   };
 
   return (
