@@ -18,6 +18,15 @@ def add_user():
         return jsonify({"success": True}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+@app.route('/get-users', methods=['GET'])
+def get_users():
+    try:
+        users_ref = db.collection('users')
+        users = [doc.to_dict() for doc in users_ref.stream()]
+        return jsonify(users), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
-if __name__ == '__main__':
-    app.run(debug=True)
+#app.run()
+#if __name__ == '__main__':
+    #app.run(debug=True)
