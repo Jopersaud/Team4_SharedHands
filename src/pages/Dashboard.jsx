@@ -1,29 +1,74 @@
+import { useEffect, useRef, useState } from "react";
+
 export default function Dashboard() {
+  const videoRef = useRef(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const startCamera = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+        });
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (err) {
+        if (err.name === "NotAllowedError") {
+          setError("Camera access denied. Please enable permissions.");
+        } else if (err.name === "NotFoundError") {
+          setError("No camera device found.");
+        } else {
+          setError("Error accessing camera.");
+        }
+      }
+    };
+
+    startCamera();
+  }, []);
+
   return (
-    <div style={styles.container}>
+    <div style={styles.page}>
       <h1>Dashboard</h1>
 
-      <div style={styles.videoContainer}>
-        <p style={{ color: "white" }}>Camera feed will display here</p>
-        {/* Future implementation:
-        <video autoPlay playsInline />
-        */}
-      </div>
+      {error ? (
+        <div style={styles.error}>{error}</div>
+      ) : (
+        <div style={styles.videoContainer}>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            style={styles.video}
+          />
+        </div>
+      )}
     </div>
   );
 }
 
 const styles = {
-  container: {
-    padding: "40px",
+  page: {
+    height: "100vh",
+    display: "flex",
+    flexDirection: "column",
+    paddingTop: "20px",
   },
   videoContainer: {
-    marginTop: "20px",
-    width: "100%",
-    height: "400px",
+    width: "50%",
+    height: "800px",
     backgroundColor: "black",
     display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
+  },
+  video: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+  },
+  error: {
+    marginTop: "20px",
+    color: "red",
+    fontWeight: "bold",
   },
 };
