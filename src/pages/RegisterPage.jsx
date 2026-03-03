@@ -16,6 +16,7 @@ export default function RegisterPage() {
   };
 
   const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
 
     if (formData.password !== formData.confirmPassword) {
@@ -48,6 +49,11 @@ export default function RegisterPage() {
       console.error("Registration error:", error);
       alert("There was an error creating your account.");
     }
+    // Placeholder for future Flask POST /register
+    console.log("Register user:", formData);
+
+    alert("Account created successfully!");
+    navigate("/");
   };
 
   return (

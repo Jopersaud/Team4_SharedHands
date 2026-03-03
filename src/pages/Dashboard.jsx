@@ -8,6 +8,7 @@ export default function Dashboard() {
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [uploadError, setUploadError] = useState(null);
   const [imageUrl, setImageUrl] = useState('');
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const startCamera = async () => {
@@ -100,6 +101,14 @@ export default function Dashboard() {
           )}
           {uploadError && <div style={styles.error}>{uploadError}</div>}
         </>
+        <div style={styles.videoContainer}>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            style={styles.video}
+          />
+        </div>
       )}
     </div>
   );
@@ -119,6 +128,12 @@ const styles = {
     backgroundColor: "black",
     display: "flex",
     marginBottom: '20px',
+  },
+  videoContainer: {
+    width: "50%",
+    height: "800px",
+    backgroundColor: "black",
+    display: "flex",
   },
   video: {
     width: "100%",
