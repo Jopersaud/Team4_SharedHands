@@ -37,6 +37,6 @@
 - `subscriptionTier`: Must be one of: 'free', 'premium', 'enterprise'
 - `subscriptionStatus`: Must be one of: 'active', 'cancelled', 'expired', 'trialing'
 
-![Creating User Test](../images/CreatingUser+GetAllUsers.png)
+![Creating User Test](./images/CreatingUser+GetAllUsers.png)
 
 NOTE: Image does not accurately reflect the  number of items within each document as presented here, this will be changed and the corresponding image testing this will be fixed as well.
