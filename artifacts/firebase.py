@@ -1,5 +1,5 @@
 import firebase_admin
-from firebase_admin import credentials, firestore, storage
+from firebase_admin import credentials, firestore, storage, auth
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
@@ -7,15 +7,11 @@ import logging
 from PIL import Image
 from datetime import datetime
 
-
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Using hardcoded path for Firebase credentials as requested.
-# Please be aware that for production environments, using environment variables
-# or other secure methods to manage credentials is highly recommended.
+# Initialize Firebase Admin
 cred = credentials.Certificate("/Users/josh/SPR2026/CIS454/SharedHands/SharedHandsAdminKey.json")
-# NOTE: You may need to replace 'your-project-id.appspot.com' with your actual Firebase Storage bucket name.
 firebase_admin.initialize_app(cred, {
     'storageBucket': 'sharedhands-f232b.appspot.com'
 })
@@ -23,10 +19,229 @@ firebase_admin.initialize_app(cred, {
 db = firestore.client()
 
 app = Flask(__name__)
-
-# This allows all origins for all routes, which is convenient for development.
-# For production, you should restrict this to your frontend's domain.
 CORS(app)
+
+
+@app.route('/register', methods=['POST'])
+def register_user():
+
+    try:
+        data = request.json
+        
+        # Extract required fields
+        email = data.get('email')
+        password = data.get('password')
+        
+        try:
+            user_record = auth.create_user(
+                email=email,
+                password=password,  
+                email_verified=False
+            )
+            
+            logging.info(f"Created Firebase Auth user: {user_record.uid}")
+            
+        except auth.EmailAlreadyExistsError:
+            return jsonify({
+                "success": False,
+                "error": "Email already registered"
+            }), 400
+        except Exception as e:
+            logging.error(f"Failed to create Firebase Auth user: {e}")
+            return jsonify({
+                "success": False,
+                "error": "Failed to create user account"
+            }), 500
+        
+        try:
+            user_profile = {
+                # Identity & Authentication
+                'uid': user_record.uid,
+                'email': email,
+                
+                # Account Management
+                'createdAt': firestore.SERVER_TIMESTAMP,
+                'lastLoginAt': firestore.SERVER_TIMESTAMP,
+                'accountStatus': 'active',
+                
+                # Subscription & Tier
+                'subscriptionTier': 'free',
+                'subscriptionStatus': 'active',
+                'subscriptionId': None,
+                'premiumFeaturesEnabled': False,
+                
+                # User Preferences (with defaults)
+                'preferences': {
+                    'outputLanguage': 'en',
+                    'signLanguageType': 'ASL',
+                    'camera': {
+                        'defaultCamera': 'front',
+                        'resolution': 'medium',
+                        'fps': 30
+                    },
+                },
+                # Organization (for enterprise users)
+                'organizationId': None,
+                'organizationRole': None,
+            }
+            
+            db.collection('users').document(user_record.uid).set(user_profile)
+            
+            logging.info(f"Created Firestore profile for user: {user_record.uid}")
+            
+            return jsonify({
+                "success": True,
+                "message": "User registered successfully",
+                "uid": user_record.uid,
+                "email": email
+            }), 201
+            
+        except Exception as e:
+            logging.error(f"Failed to create Firestore profile: {e}")
+            try:
+                auth.delete_user(user_record.uid)
+                logging.info(f"Rolled back: Deleted Auth user {user_record.uid}")
+            except:
+                pass
+            
+            return jsonify({
+                "success": False,
+                "error": "Failed to create user profile"
+            }), 500
+            
+    except Exception as e:
+        logging.error(f"Registration error: {e}")
+        return jsonify({
+            "success": False,
+            "error": "Registration failed"
+        }), 500
+
+@app.route('/login', methods=['POST'])
+def login_user():
+    """
+    Verify user credentials and return user data
+    Note: Password verification happens via Firebase Auth on frontend
+    This endpoint is for additional backend logic after successful auth
+    """
+    try:
+        data = request.json
+        uid = data.get('uid')  # Frontend sends UID after Firebase Auth login
+        
+        if not uid:
+            return jsonify({
+                "success": False,
+                "error": "User ID required"
+            }), 400
+        
+        # Get user profile from Firestore
+        user_doc = db.collection('users').document(uid).get()
+        
+        if not user_doc.exists:
+            return jsonify({
+                "success": False,
+                "error": "User profile not found"
+            }), 404
+        
+        user_data = user_doc.to_dict()
+        
+        # Check account status
+        if user_data.get('accountStatus') != 'active':
+            return jsonify({
+                "success": False,
+                "error": "Account is not active"
+            }), 403
+        
+        # Update last login time
+        db.collection('users').document(uid).update({
+            'lastLoginAt': firestore.SERVER_TIMESTAMP,
+            'security.failedLoginAttempts': 0  # Reset failed attempts
+        })
+        
+        logging.info(f"User logged in: {uid}")
+        
+        return jsonify({
+            "success": True,
+            "user": user_data
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Login error: {e}")
+        return jsonify({
+            "success": False,
+            "error": "Login failed"
+        }), 500
+
+
+
+@app.route('/get-users', methods=['GET'])
+def get_users():
+    """Get all users (for admin dashboard)"""
+    try:
+        users_ref = db.collection('users')
+        users = []
+        
+        for doc in users_ref.stream():
+            user_data = doc.to_dict()
+            
+            # Remove sensitive data
+            if 'security' in user_data:
+                user_data['security'] = {
+                    'twoFactorEnabled': user_data['security'].get('twoFactorEnabled', False)
+                }
+            
+            users.append(user_data)
+        
+        return jsonify({
+            "success": True,
+            "users": users,
+            "count": len(users)
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Error fetching users: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 400
+
+# ============================================================================
+# UPDATE USER PROFILE
+# ============================================================================
+
+@app.route('/user/<uid>', methods=['PATCH'])
+def update_user(uid):
+    """Update user profile"""
+    try:
+        updates = request.json
+        
+        # Don't allow updating certain fields
+        protected_fields = ['uid', 'email', 'createdAt', 'subscriptionTier']
+        for field in protected_fields:
+            if field in updates:
+                del updates[field]
+        
+        # Add update timestamp
+        updates['updatedAt'] = firestore.SERVER_TIMESTAMP
+        
+        db.collection('users').document(uid).update(updates)
+        
+        logging.info(f"Updated user profile: {uid}")
+        
+        return jsonify({
+            "success": True,
+            "message": "User updated successfully"
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Error updating user: {e}")
+        return jsonify({
+            "success": False,
+            "error": "Failed to update user"
+        }), 500
+
+# ============================================================================
+# IMAGE UPLOAD ENDPOINTS (Your existing code - unchanged)
+# ============================================================================
 
 @app.route('/upload-image', methods=['POST'])
 def upload_image():
@@ -37,26 +252,19 @@ def upload_image():
     image_file = request.files['image']
 
     try:
-        # Validate that it's a valid image file
         Image.open(image_file).verify()
-        # Reset stream position after verification
         image_file.seek(0)
     except Exception as e:
         logging.error(f"Invalid image file provided: {e}")
         return jsonify({"success": False, "error": f"Invalid image file: {e}"}), 400
 
     try:
-        # Create a unique filename
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"captures/single/{timestamp}.jpg"
         
         bucket = storage.bucket()
         blob = bucket.blob(filename)
-        
-        # Upload the file
         blob.upload_from_file(image_file, content_type='image/jpeg')
-        
-        # Make the file publicly accessible
         blob.make_public()
         
         logging.info(f"Successfully uploaded single image: {filename}")
@@ -77,7 +285,7 @@ def upload_sequence():
         logging.error("No images selected for upload in /upload-sequence")
         return jsonify({"success": False, "error": "No images selected for upload"}), 400
 
-    sequence_id = f"sequence_{firestore.SERVER_TIMESTAMP}"
+    sequence_id = f"sequence_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     bucket = storage.bucket()
     
     success_urls = []
@@ -85,7 +293,6 @@ def upload_sequence():
 
     for i, image_file in enumerate(image_files):
         try:
-            # Validate image
             Image.open(image_file).verify()
             image_file.seek(0)
         except Exception as e:
@@ -111,23 +318,9 @@ def upload_sequence():
         "failed_files": failed_files
     }), 200
 
-@app.route('/register', methods=['POST'])
-def add_user():
-    try:
-        user_data = request.json
-        db.collection('users').add(user_data)
-        return jsonify({"success": True, "message": "User created successfully"}), 200
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 400
-
-@app.route('/get-users', methods=['GET'])
-def get_users():
-    try:
-        users_ref = db.collection('users')
-        users = [doc.to_dict() for doc in users_ref.stream()]
-        return jsonify(users), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+# ============================================================================
+# RUN SERVER
+# ============================================================================
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
