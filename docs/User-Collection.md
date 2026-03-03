@@ -44,9 +44,9 @@ NOTE: Image does not accurately reflect the  number of items within each documen
 
 Testing new function to change the subscription status of a user.
 
-![Changing Subscription Status](./images/Screenshot 2026-03-03 at 5.17.30 PM.png)
+![Changing Subscription Status](./images/ChangingSub.png)
 
 Change appears in user collection granting the user access to premium features and changing their status to active under premium tier.
 
-![Change in Users collection](./images/Screenshot 2026-03-03 at 5.18.03 PM.png)
+![Change in Users collection](./images/ShowingSubChange.png)
 
