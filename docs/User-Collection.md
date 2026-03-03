@@ -1,4 +1,4 @@
-﻿
+
 # User Collection Schema
 
 ```javascript
@@ -40,3 +40,13 @@
 ![Creating User Test](./images/CreatingUser+GetAllUsers.png)
 
 NOTE: Image does not accurately reflect the  number of items within each document as presented here, this will be changed and the corresponding image testing this will be fixed as well.
+
+
+Testing new function to change the subscription status of a user.
+
+![Changing Subscription Status](./images/Screenshot 2026-03-03 at 5.17.30 PM.png)
+
+Change appears in user collection granting the user access to premium features and changing their status to active under premium tier.
+
+![Change in Users collection](./images/Screenshot 2026-03-03 at 5.18.03 PM.png)
+
