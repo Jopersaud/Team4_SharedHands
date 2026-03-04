@@ -16,7 +16,6 @@ export default function RegisterPage() {
   };
 
   const handleSubmit = async (e) => {
-  const handleSubmit = (e) => {
     e.preventDefault();
 
     if (formData.password !== formData.confirmPassword) {
@@ -33,7 +32,7 @@ export default function RegisterPage() {
         body: JSON.stringify({
           username: formData.username,
           email: formData.email,
-          password: formData.password, // Note: In a real app, never send plain text passwords
+          password: formData.password,
         }),
       });
 
@@ -49,11 +48,6 @@ export default function RegisterPage() {
       console.error("Registration error:", error);
       alert("There was an error creating your account.");
     }
-    // Placeholder for future Flask POST /register
-    console.log("Register user:", formData);
-
-    alert("Account created successfully!");
-    navigate("/");
   };
 
   return (
@@ -104,7 +98,6 @@ export default function RegisterPage() {
     </div>
   );
 }
-
 
 const styles = {
   container: {
