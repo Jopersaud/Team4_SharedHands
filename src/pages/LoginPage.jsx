@@ -15,13 +15,31 @@ export default function LoginPage() {
     document.head.appendChild(link);
   }, []);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
 
-    // Placeholder for future Flask POST request
-    console.log("Login attempt:", { email, password });
+    try {
+      const response = await fetch("/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
 
-    navigate("/dashboard");
+      const data = await response.json();
+
+      if (data.success) {
+        // Optionally, store user data in context or local storage
+        console.log("Login successful:", data.user);
+        navigate("/dashboard");
+      } else {
+        alert("Login failed: " + data.error);
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      alert("There was an error logging in.");
+    }
   };
 
   return (
