@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Navbar from "../components/Navbar";
 
 export default function Dashboard() {
   const videoRef = useRef(null);
@@ -9,7 +10,6 @@ export default function Dashboard() {
   const [uploadError, setUploadError] = useState(null);
   const [imageUrl, setImageUrl] = useState('');
   const [translationText, setTranslationText] = useState('');
-  const [menuOpen, setMenuOpen] = useState(false);
 
   // Inject Google Font
   useEffect(() => {
@@ -22,9 +22,7 @@ export default function Dashboard() {
   useEffect(() => {
     const startCamera = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-        });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
@@ -38,7 +36,6 @@ export default function Dashboard() {
         }
       }
     };
-
     startCamera();
   }, []);
 
@@ -60,10 +57,7 @@ export default function Dashboard() {
       const formData = new FormData();
       formData.append('image', blob, 'capture.jpg');
 
-      fetch('/upload-image', {
-        method: 'POST',
-        body: formData,
-      })
+      fetch('/upload-image', { method: 'POST', body: formData })
         .then(response => response.json())
         .then(data => {
           if (data.success) {
@@ -74,46 +68,20 @@ export default function Dashboard() {
             setUploadError(data.error || 'Unknown error during upload.');
           }
         })
-        .catch(err => {
-          setUploadError(`Upload failed: ${err.message}`);
-        })
-        .finally(() => {
-          setUploading(false);
-        });
+        .catch(err => setUploadError(`Upload failed: ${err.message}`))
+        .finally(() => setUploading(false));
     }, 'image/jpeg');
   };
 
   return (
     <div style={styles.page}>
 
-      {/* Navbar */}
-      <div style={styles.navbar}>
-        <button
-          style={styles.hamburger}
-          onClick={() => setMenuOpen(!menuOpen)}
-          aria-label="Toggle menu"
-        >
-          <span style={styles.bar} />
-          <span style={styles.bar} />
-          <span style={styles.bar} />
-        </button>
-        <span style={styles.navTitle}>Translation Page</span>
-
-        {/* Dropdown menu */}
-        {menuOpen && (
-          <div style={styles.dropdown}>
-            <a href="#" style={styles.dropdownItem}>Home</a>
-            <a href="#" style={styles.dropdownItem}>Settings</a>
-            <a href="#" style={styles.dropdownItem}>About</a>
-          </div>
-        )}
-      </div>
+      <Navbar />
 
       {error ? (
         <div style={styles.error}>{error}</div>
       ) : (
         <>
-          {/* Main content row */}
           <div style={styles.contentRow}>
             {/* Left: Translation display */}
             <div style={styles.translationPanel}>
@@ -139,21 +107,16 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Capture button centered below */}
           <div style={styles.buttonRow}>
             <button
               onClick={captureAndUploadImage}
               disabled={uploading}
-              style={{
-                ...styles.button,
-                ...(uploading ? styles.buttonDisabled : {}),
-              }}
+              style={{ ...styles.button, ...(uploading ? styles.buttonDisabled : {}) }}
             >
               {uploading ? 'Uploading...' : 'Capture and Upload'}
             </button>
           </div>
 
-          {/* Status messages */}
           {uploadSuccess && (
             <div style={styles.success}>
               Upload successful!{' '}
@@ -171,94 +134,34 @@ export default function Dashboard() {
 
 const styles = {
   page: {
-    minHeight: "100vh",
+    height: "100vh",
+    overflow: "hidden",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    padding: "0 32px 24px 32px",
+    padding: "0 24px 16px 24px",
     background: "linear-gradient(180deg, #0ea5e9 0%, #38bdf8 50%, #7dd3fc 100%)",
     fontFamily: "'Poppins', sans-serif",
     boxSizing: "border-box",
   },
-
-  /* Navbar */
-  navbar: {
-    position: "relative",
-    width: "100%",
-    display: "flex",
-    alignItems: "center",
-    padding: "14px 0",
-    marginBottom: "20px",
-    borderBottom: "1px solid rgba(255,255,255,0.2)",
-  },
-  hamburger: {
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "space-between",
-    width: "28px",
-    height: "20px",
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    padding: 0,
-    flexShrink: 0,
-  },
-  bar: {
-    display: "block",
-    width: "100%",
-    height: "3px",
-    backgroundColor: "#ffffff",
-    borderRadius: "2px",
-  },
-  navTitle: {
-    marginLeft: "18px",
-    fontSize: "18px",
-    fontWeight: "600",
-    color: "#ffffff",
-    letterSpacing: "0.5px",
-  },
-  dropdown: {
-    position: "absolute",
-    top: "100%",
-    left: 0,
-    backgroundColor: "#1e3a8a",
-    borderRadius: "10px",
-    boxShadow: "0 6px 20px rgba(0,0,0,0.3)",
-    display: "flex",
-    flexDirection: "column",
-    minWidth: "160px",
-    zIndex: 100,
-    overflow: "hidden",
-  },
-  dropdownItem: {
-    padding: "12px 20px",
-    color: "#ffffff",
-    textDecoration: "none",
-    fontSize: "14px",
-    fontWeight: "500",
-    borderBottom: "1px solid rgba(255,255,255,0.1)",
-  },
-
-  /* Two-panel row */
   contentRow: {
     display: "flex",
     flexDirection: "row",
-    gap: "20px",
+    gap: "16px",
     width: "100%",
     maxWidth: "1400px",
     flex: 1,
+    minHeight: 0,
   },
-
-  /* Left translation panel */
   translationPanel: {
     flex: "0 0 25%",
     backgroundColor: "#dbeafe",
     borderRadius: "16px",
-    padding: "20px",
+    padding: "16px",
     boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
     display: "flex",
     flexDirection: "column",
-    minHeight: "520px",
+    overflow: "hidden",
   },
   translationBody: {
     flex: 1,
@@ -276,17 +179,15 @@ const styles = {
     fontStyle: "italic",
     margin: 0,
   },
-
-  /* Right video panel */
   videoPanel: {
     flex: "1 1 75%",
     backgroundColor: "#dbeafe",
     borderRadius: "16px",
-    padding: "20px",
+    padding: "16px",
     boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
     display: "flex",
     flexDirection: "column",
-    minHeight: "520px",
+    overflow: "hidden",
   },
   video: {
     width: "100%",
@@ -294,26 +195,24 @@ const styles = {
     borderRadius: "10px",
     objectFit: "cover",
     backgroundColor: "#000",
-    minHeight: "400px",
+    minHeight: 0,
   },
-
-  /* Shared panel label */
   panelLabel: {
-    margin: "0 0 12px 0",
+    margin: "0 0 10px 0",
     fontSize: "13px",
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: "0.8px",
     color: "#1d4ed8",
+    flexShrink: 0,
   },
-
-  /* Button row */
   buttonRow: {
     display: "flex",
     justifyContent: "center",
-    marginTop: "20px",
+    marginTop: "14px",
     width: "100%",
     maxWidth: "1400px",
+    flexShrink: 0,
   },
   button: {
     padding: "12px 36px",
@@ -332,19 +231,19 @@ const styles = {
     cursor: "not-allowed",
     boxShadow: "none",
   },
-
-  /* Status */
   error: {
-    marginTop: "16px",
+    marginTop: "10px",
     color: "#fca5a5",
     fontWeight: "bold",
     fontSize: "14px",
+    flexShrink: 0,
   },
   success: {
-    marginTop: "16px",
+    marginTop: "10px",
     color: "#6ee7b7",
     fontWeight: "bold",
     fontSize: "14px",
+    flexShrink: 0,
   },
   link: {
     color: "#6ee7b7",
