@@ -2,6 +2,9 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 
+import { auth } from "../firebaseConfig";
+import { signInWithEmailAndPassword } from "firebase/auth";
+
 export default function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -19,26 +22,32 @@ export default function LoginPage() {
     e.preventDefault();
 
     try {
+      // Step 1: Sign in with Firebase
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      const uid = user.uid;
+
+      // Step 2: Send UID to your backend
       const response = await fetch("/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ uid }),
       });
 
       const data = await response.json();
 
       if (data.success) {
         // Optionally, store user data in context or local storage
-        console.log("Login successful:", data.user);
+        console.log("Backend login successful:", data.user);
         navigate("/dashboard");
       } else {
-        alert("Login failed: " + data.error);
+        alert("Backend login failed: " + data.error);
       }
     } catch (error) {
-      console.error("Login error:", error);
-      alert("There was an error logging in.");
+      console.error("Firebase or backend login error:", error);
+      alert("Login failed: " + error.message);
     }
   };
 
