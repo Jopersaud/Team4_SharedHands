@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Navbar from "../components/Navbar";
 
 export default function Dashboard() {
   const videoRef = useRef(null);
@@ -8,15 +9,20 @@ export default function Dashboard() {
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [uploadError, setUploadError] = useState(null);
   const [imageUrl, setImageUrl] = useState('');
-  const [error, setError] = useState(null);
+  const [translationText, setTranslationText] = useState('');
+
+  // Inject Google Font
+  useEffect(() => {
+    const link = document.createElement("link");
+    link.href = "https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap";
+    link.rel = "stylesheet";
+    document.head.appendChild(link);
+  }, []);
 
   useEffect(() => {
     const startCamera = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-        });
-
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
@@ -30,7 +36,6 @@ export default function Dashboard() {
         }
       }
     };
-
     startCamera();
   }, []);
 
@@ -52,63 +57,76 @@ export default function Dashboard() {
       const formData = new FormData();
       formData.append('image', blob, 'capture.jpg');
 
-      fetch('/upload-image', {
-        method: 'POST',
-        body: formData,
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.success) {
-          setUploadSuccess(true);
-          setImageUrl(data.url);
-        } else {
-          setUploadError(data.error || 'Unknown error during upload.');
-        }
-      })
-      .catch(err => {
-        setUploadError(`Upload failed: ${err.message}`);
-      })
-      .finally(() => {
-        setUploading(false);
-      });
+      fetch('/upload-image', { method: 'POST', body: formData })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            setUploadSuccess(true);
+            setImageUrl(data.url);
+            setTranslationText(data.translation || '');
+          } else {
+            setUploadError(data.error || 'Unknown error during upload.');
+          }
+        })
+        .catch(err => setUploadError(`Upload failed: ${err.message}`))
+        .finally(() => setUploading(false));
     }, 'image/jpeg');
   };
 
   return (
     <div style={styles.page}>
-      <h1>Dashboard</h1>
+
+      <Navbar />
 
       {error ? (
         <div style={styles.error}>{error}</div>
       ) : (
         <>
-          <div style={styles.videoContainer}>
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              style={styles.video}
-            />
-            <canvas ref={canvasRef} style={{ display: 'none' }} />
+          <div style={styles.contentRow}>
+            {/* Left: Translation display */}
+            <div style={styles.translationPanel}>
+              <p style={styles.panelLabel}>Translation Display</p>
+              <div style={styles.translationBody}>
+                {translationText
+                  ? <p style={styles.translationText}>{translationText}</p>
+                  : <p style={styles.placeholder}>Translation will appear here after capturing an image.</p>
+                }
+              </div>
+            </div>
+
+            {/* Right: Video display */}
+            <div style={styles.videoPanel}>
+              <p style={styles.panelLabel}>Video Display</p>
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                style={styles.video}
+              />
+              <canvas ref={canvasRef} style={{ display: 'none' }} />
+            </div>
           </div>
-          <button onClick={captureAndUploadImage} disabled={uploading} style={styles.button}>
-            {uploading ? 'Uploading...' : 'Capture and Upload'}
-          </button>
+
+          <div style={styles.buttonRow}>
+            <button
+              onClick={captureAndUploadImage}
+              disabled={uploading}
+              style={{ ...styles.button, ...(uploading ? styles.buttonDisabled : {}) }}
+            >
+              {uploading ? 'Uploading...' : 'Capture and Upload'}
+            </button>
+          </div>
+
           {uploadSuccess && (
             <div style={styles.success}>
-              Upload successful! Image URL: <a href={imageUrl} target="_blank" rel="noopener noreferrer">{imageUrl}</a>
+              Upload successful!{' '}
+              <a href={imageUrl} target="_blank" rel="noopener noreferrer" style={styles.link}>
+                {imageUrl}
+              </a>
             </div>
           )}
           {uploadError && <div style={styles.error}>{uploadError}</div>}
         </>
-        <div style={styles.videoContainer}>
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            style={styles.video}
-          />
-        </div>
       )}
     </div>
   );
@@ -117,43 +135,118 @@ export default function Dashboard() {
 const styles = {
   page: {
     height: "100vh",
+    overflow: "hidden",
     display: "flex",
     flexDirection: "column",
-    paddingTop: "20px",
-    alignItems: 'center',
+    alignItems: "center",
+    padding: "0 24px 16px 24px",
+    background: "linear-gradient(180deg, #0ea5e9 0%, #38bdf8 50%, #7dd3fc 100%)",
+    fontFamily: "'Poppins', sans-serif",
+    boxSizing: "border-box",
   },
-  videoContainer: {
-    width: "50%",
-    height: "auto",
-    backgroundColor: "black",
+  contentRow: {
     display: "flex",
-    marginBottom: '20px',
+    flexDirection: "row",
+    gap: "16px",
+    width: "100%",
+    maxWidth: "1400px",
+    flex: 1,
+    minHeight: 0,
   },
-  videoContainer: {
-    width: "50%",
-    height: "800px",
-    backgroundColor: "black",
+  translationPanel: {
+    flex: "0 0 25%",
+    backgroundColor: "#dbeafe",
+    borderRadius: "16px",
+    padding: "16px",
+    boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
     display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  },
+  translationBody: {
+    flex: 1,
+    overflowY: "auto",
+  },
+  translationText: {
+    fontSize: "16px",
+    color: "#1e3a8a",
+    lineHeight: "1.6",
+    margin: 0,
+  },
+  placeholder: {
+    fontSize: "14px",
+    color: "#6b9fd4",
+    fontStyle: "italic",
+    margin: 0,
+  },
+  videoPanel: {
+    flex: "1 1 75%",
+    backgroundColor: "#dbeafe",
+    borderRadius: "16px",
+    padding: "16px",
+    boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
   },
   video: {
     width: "100%",
-    height: "100%",
+    flex: 1,
+    borderRadius: "10px",
     objectFit: "cover",
+    backgroundColor: "#000",
+    minHeight: 0,
+  },
+  panelLabel: {
+    margin: "0 0 10px 0",
+    fontSize: "13px",
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: "0.8px",
+    color: "#1d4ed8",
+    flexShrink: 0,
+  },
+  buttonRow: {
+    display: "flex",
+    justifyContent: "center",
+    marginTop: "14px",
+    width: "100%",
+    maxWidth: "1400px",
+    flexShrink: 0,
   },
   button: {
-    padding: '10px 20px',
-    fontSize: '16px',
-    cursor: 'pointer',
-    marginBottom: '10px',
+    padding: "12px 36px",
+    fontSize: "15px",
+    fontWeight: "600",
+    cursor: "pointer",
+    backgroundColor: "#6ee7b7",
+    color: "#ffffff",
+    border: "none",
+    borderRadius: "30px",
+    boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
+    letterSpacing: "0.4px",
+  },
+  buttonDisabled: {
+    backgroundColor: "#555",
+    cursor: "not-allowed",
+    boxShadow: "none",
   },
   error: {
-    marginTop: "20px",
-    color: "red",
+    marginTop: "10px",
+    color: "#fca5a5",
     fontWeight: "bold",
+    fontSize: "14px",
+    flexShrink: 0,
   },
   success: {
-    marginTop: "20px",
-    color: "green",
+    marginTop: "10px",
+    color: "#6ee7b7",
     fontWeight: "bold",
+    fontSize: "14px",
+    flexShrink: 0,
+  },
+  link: {
+    color: "#6ee7b7",
+    wordBreak: "break-all",
   },
 };

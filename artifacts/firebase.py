@@ -10,8 +10,8 @@ from datetime import datetime
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Initialize Firebase Admin
-cred = credentials.Certificate("/Users/josh/SPR2026/CIS454/SharedHands/SharedHandsAdminKey.json")
+cred = credentials.Certificate("/Users/josh/SPR2026/CIS454/SharedHands/SharedHandsAdminKey.json")  
+
 firebase_admin.initialize_app(cred, {
     'storageBucket': 'sharedhands-f232b.appspot.com'
 })
@@ -317,7 +317,91 @@ def upload_sequence():
         "uploaded_urls": success_urls,
         "failed_files": failed_files
     }), 200
-
+@app.route('/update-subscription', methods=['POST'])
+def update_subscription():
+    try:
+        data = request.json
+        
+        # Validate required fields
+        uid = data.get('uid')
+        subscription_tier = data.get('subscriptionTier')
+        
+        if not uid:
+            return jsonify({
+                "success": False,
+                "error": "User ID (uid) is required"
+            }), 400
+        
+        if not subscription_tier:
+            return jsonify({
+                "success": False,
+                "error": "subscriptionTier is required"
+            }), 400
+        
+        # Validate subscription tier
+        valid_tiers = ['free', 'premium', 'enterprise']
+        if subscription_tier not in valid_tiers:
+            return jsonify({
+                "success": False,
+                "error": f"Invalid subscription tier. Must be one of: {', '.join(valid_tiers)}"
+            }), 400
+        
+        # Optional: subscription status (defaults to 'active')
+        subscription_status = data.get('subscriptionStatus', 'active')
+        valid_statuses = ['active', 'cancelled', 'expired', 'trialing']
+        if subscription_status not in valid_statuses:
+            return jsonify({
+                "success": False,
+                "error": f"Invalid subscription status. Must be one of: {', '.join(valid_statuses)}"
+            }), 400
+        
+        # Check if user exists
+        user_ref = db.collection('users').document(uid)
+        user_doc = user_ref.get()
+        
+        if not user_doc.exists:
+            return jsonify({
+                "success": False,
+                "error": f"User not found: {uid}"
+            }), 404
+        
+        # Determine premium features based on tier
+        premium_features_enabled = subscription_tier in ['premium', 'enterprise']
+        
+        # Prepare updates
+        updates = {
+            'subscriptionTier': subscription_tier,
+            'subscriptionStatus': subscription_status,
+            'premiumFeaturesEnabled': premium_features_enabled,
+            'updatedAt': firestore.SERVER_TIMESTAMP
+        }
+        
+        # Update Firestore
+        user_ref.update(updates)
+        
+        logging.info(f"Updated subscription for user {uid}: {subscription_tier} ({subscription_status})")
+        
+        # Get updated user data
+        updated_user = user_ref.get().to_dict()
+        
+        return jsonify({
+            "success": True,
+            "message": f"Subscription updated to {subscription_tier}",
+            "user": {
+                "uid": uid,
+                "email": updated_user.get('email'),
+                "subscriptionTier": updated_user.get('subscriptionTier'),
+                "subscriptionStatus": updated_user.get('subscriptionStatus'),
+                "premiumFeaturesEnabled": updated_user.get('premiumFeaturesEnabled')
+            }
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Error updating subscription: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"Failed to update subscription: {str(e)}"
+        }), 500
 # ============================================================================
 # RUN SERVER
 # ============================================================================
