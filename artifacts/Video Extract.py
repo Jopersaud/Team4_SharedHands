@@ -72,7 +72,7 @@ for sign_label in os.listdir(dataset_path):
                     frame_landmarks.extend([point.x, point.y, point.z])
                 landmark_sequence.append(frame_landmarks)
             else:
-                # No hand detected in this frame — skip whole clip
+                # No hand detected in this frame...skip whole clip
                 valid = False
                 break
 
