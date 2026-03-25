@@ -11,9 +11,9 @@
 
 ## Screenshots
 
-![Task Overview](/docs/images/Screenshot 2026-03-25 190500.png) _Task details and acceptance criteria_
+![Task Overview](/images/Screenshot 2026-03-25 190500.png) _Task details and acceptance criteria_
 
-![Progress Update](/docs/images/Screenshot 2026-03-25 191041.png) _Progress update_
+![Progress Update](/images/Screenshot 2026-03-25 191041.png) _Progress update_
 
 ### Environment Setup (Completed)
 
