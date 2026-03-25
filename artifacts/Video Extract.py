@@ -21,7 +21,7 @@ sequences = []  # will hold {label, frames: [[63 numbers], ...]}
 failed = 0
 saved = 0
 
-dataset_path = "ASL_dynamic/ASL_dynamic"  # change this to your actual folder name
+dataset_path = "ASL_dynamic/ASL_dynamic"
 
 for sign_label in os.listdir(dataset_path):
     sign_path = os.path.join(dataset_path, sign_label)
