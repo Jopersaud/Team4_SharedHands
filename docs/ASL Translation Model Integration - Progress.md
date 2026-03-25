@@ -11,7 +11,7 @@
 
 ## Screenshots
 
-![Task Overview](docs/images/Screenshot%202026-03-25%20190500.png) _Task details and acceptance criteria_
+![Task Overview](/docs/images/Screenshot%202026-03-25%20190500.png) _Task details and acceptance criteria_
 
 ![Progress Update](/docs/images/Screenshot%202026-03-25%20191041.png) _Progress update_
 
