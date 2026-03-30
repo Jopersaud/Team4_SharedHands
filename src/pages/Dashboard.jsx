@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import Navbar from "../components/Navbar";
 import Webcam from 'react-webcam';
 import io from 'socket.io-client';
+import { useSettings } from "../context/SettingsContext";
 
 const socket = io('http://100.91.247.124:5000');
 
@@ -13,6 +14,8 @@ export default function Dashboard() {
   const [processedFrame, setProcessedFrame] = useState('');
   const [cameraReady, setCameraReady] = useState(false);
 
+  const { cameraEnabled, selectedDeviceId, translationFontSize } = useSettings();
+
   // Inject Google Font
   useEffect(() => {
     const link = document.createElement("link");
@@ -20,6 +23,16 @@ export default function Dashboard() {
     link.rel = "stylesheet";
     document.head.appendChild(link);
   }, []);
+
+  // Reset processed frame when camera is disabled
+  useEffect(() => {
+    if (!cameraEnabled) {
+      setProcessedFrame('');
+      setCameraReady(false);
+      setPredictedLetter('');
+      setConfidence(0);
+    }
+  }, [cameraEnabled]);
 
   useEffect(() => {
     socket.on('connect', () => {
@@ -45,9 +58,9 @@ export default function Dashboard() {
       setError('A translation error occurred on the server.');
     });
 
-    // Frame-sending interval
+    // Frame-sending interval — only sends if camera is enabled
     const intervalId = setInterval(() => {
-      if (socket.connected && webcamRef.current) {
+      if (socket.connected && webcamRef.current && cameraEnabled) {
         const imageSrc = webcamRef.current.getScreenshot();
         if (imageSrc) {
           socket.emit('video_frame', imageSrc);
@@ -63,7 +76,7 @@ export default function Dashboard() {
       socket.off('translation_result');
       socket.off('translation_error');
     };
-  }, []);
+  }, [cameraEnabled]);
 
   return (
     <div style={styles.page}>
@@ -75,12 +88,19 @@ export default function Dashboard() {
         <div style={styles.translationPanel}>
           <p style={styles.panelLabel}>Real-Time Translation</p>
           <div style={styles.translationBody}>
-            {error ? (
+            {!cameraEnabled ? (
+              <p style={styles.placeholder}>Camera is disabled.</p>
+            ) : error ? (
               <p style={{ ...styles.placeholder, color: 'red' }}>{error}</p>
             ) : predictedLetter ? (
               <>
-                <p style={styles.translationText}>{predictedLetter}</p>
-                <p style={styles.confidenceText}>Confidence: {(confidence * 100).toFixed(2)}%</p>
+                {/* Font size driven by settings context */}
+                <p style={{ ...styles.translationText, fontSize: `${translationFontSize}px` }}>
+                  {predictedLetter}
+                </p>
+                <p style={styles.confidenceText}>
+                  Confidence: {(confidence * 100).toFixed(2)}%
+                </p>
               </>
             ) : (
               <p style={styles.placeholder}>Show a hand sign to the camera...</p>
@@ -92,32 +112,41 @@ export default function Dashboard() {
         <div style={styles.videoPanel}>
           <p style={styles.panelLabel}>Video Display</p>
 
-          {/* Webcam — visible until processed frame arrives, then hidden but still active for frame capture */}
-          <Webcam
-            audio={false}
-            ref={webcamRef}
-            screenshotFormat="image/jpeg"
-            onUserMedia={() => setCameraReady(true)}
-            onUserMediaError={() => setError('Camera access denied or not found.')}
-            style={{
-              ...styles.video,
-              display: processedFrame ? 'none' : 'block',
-            }}
-          />
+          {cameraEnabled ? (
+            <>
+              {/* Webcam — uses selectedDeviceId from settings if available */}
+              <Webcam
+                audio={false}
+                ref={webcamRef}
+                screenshotFormat="image/jpeg"
+                videoConstraints={selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : true}
+                onUserMedia={() => setCameraReady(true)}
+                onUserMediaError={() => setError('Camera access denied or not found.')}
+                style={{
+                  ...styles.video,
+                  display: processedFrame ? 'none' : 'block',
+                }}
+              />
 
-          {/* Processed frame from backend — shown once backend starts returning frames */}
-          {processedFrame && (
-            <img
-              src={processedFrame}
-              alt="Processed Webcam Feed"
-              style={styles.video}
-            />
-          )}
+              {/* Processed frame from backend */}
+              {processedFrame && (
+                <img
+                  src={processedFrame}
+                  alt="Processed Webcam Feed"
+                  style={styles.video}
+                />
+              )}
 
-          {/* Waiting message — only shown before camera is ready */}
-          {!cameraReady && !error && (
-            <div style={styles.waitingOverlay}>
-              Waiting for camera...
+              {/* Waiting message */}
+              {!cameraReady && !error && (
+                <div style={styles.waitingOverlay}>
+                  Waiting for camera...
+                </div>
+              )}
+            </>
+          ) : (
+            <div style={styles.disabledOverlay}>
+              Camera is disabled. Enable it in Settings ⚙
             </div>
           )}
         </div>
@@ -134,7 +163,7 @@ const styles = {
     flexDirection: "column",
     alignItems: "center",
     padding: "0 24px 16px 24px",
-    background: "linear-gradient(180deg, #0ea5e9 0%, #38bdf8 50%, #7dd3fc 100%)",
+    background: "linear-gradient(180deg, #0ea5e9 0%, #7dd3fc 40%, #ffffff 100%)",
     fontFamily: "'Poppins', sans-serif",
     boxSizing: "border-box",
   },
@@ -167,10 +196,10 @@ const styles = {
     textAlign: "center",
   },
   translationText: {
-    fontSize: "48px",
     fontWeight: "600",
     color: "#1e3a8a",
     margin: "0 0 10px 0",
+    transition: "font-size 0.2s ease",
   },
   confidenceText: {
     fontSize: "20px",
@@ -210,6 +239,18 @@ const styles = {
     fontSize: "16px",
     color: "#6b9fd4",
     fontStyle: "italic",
+  },
+  disabledOverlay: {
+    flex: 1,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "15px",
+    color: "#6b9fd4",
+    fontStyle: "italic",
+    textAlign: "center",
+    borderRadius: "10px",
+    backgroundColor: "rgba(0,0,0,0.04)",
   },
   panelLabel: {
     margin: "0 0 10px 0",
