@@ -20,7 +20,7 @@
     "socketio": "^1.0.0",
     "web-vitals": "^2.1.4"
   },
-  "proxy": "http://100.91.247.124:5000",
+  "proxy": "http://localhost:5000",
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",

@@ -1,3 +1,6 @@
+import eventlet
+eventlet.monkey_patch()
+
 import firebase_admin
 from firebase_admin import credentials, firestore, storage, auth
 from flask import Flask, request, jsonify
@@ -5,11 +8,11 @@ from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 import os
 import logging
-from PIL import Image
 from datetime import datetime
 import numpy as np
-import keras
+import tf_keras as keras
 from sklearn.preprocessing import LabelEncoder
+from collections import deque, Counter
 import pandas as pd
 import cv2
 import mediapipe as mp
@@ -18,7 +21,14 @@ import base64
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-cred = credentials.Certificate("../SharedHandsAdminKey.json")
+# ============================================================================
+# FIREBASE ADMIN SETUP
+# ============================================================================
+KEY_PATH = os.environ.get(
+    "FIREBASE_KEY_PATH",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "SharedHandsAdminKey.json")
+)
+cred = credentials.Certificate(KEY_PATH)
 
 firebase_admin.initialize_app(cred, {
     'storageBucket': 'sharedhands-f232b.appspot.com'
@@ -28,105 +38,158 @@ db = firestore.client()
 
 app = Flask(__name__)
 CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 # ============================================================================
-# ASL MODEL AND MEDIAPIPE LOADING
+# ASL MODEL AND MEDIAPIPE TASKS API SETUP
 # ============================================================================
+SMOOTHING_WINDOW = 15
+CONFIDENCE_THRESHOLD = 0.6
+
+HAND_CONNECTIONS = [
+    (0,1),(1,2),(2,3),(3,4),
+    (0,5),(5,6),(6,7),(7,8),
+    (5,9),(9,10),(10,11),(11,12),
+    (9,13),(13,14),(14,15),(15,16),
+    (13,17),(17,18),(18,19),(19,20),(0,17)
+]
+
+_BASE = os.path.dirname(os.path.abspath(__file__))
+_TASK_PATH  = os.path.join(_BASE, "hand_landmarker.task")
+_MODEL_PATH = os.path.join(_BASE, "asl_model.keras")
+_CSV_PATH   = os.path.join(_BASE, "asl_landmarks.csv")
+
 try:
-    asl_model = keras.models.load_model("artifacts/asl_model.keras")
-    df = pd.read_csv("artifacts/asl_landmarks.csv", header=None)
+    BaseOptions = mp.tasks.BaseOptions
+    HandLandmarker = mp.tasks.vision.HandLandmarker
+    HandLandmarkerOptions = mp.tasks.vision.HandLandmarkerOptions
+    VisionRunningMode = mp.tasks.vision.RunningMode
+
+    _options = HandLandmarkerOptions(
+        base_options=BaseOptions(model_asset_path=_TASK_PATH),
+        running_mode=VisionRunningMode.IMAGE,
+        num_hands=4,
+        min_hand_detection_confidence=0.7,
+        min_hand_presence_confidence=0.7,
+    )
+    hand_landmarker = HandLandmarker.create_from_options(_options)
+
+    asl_model = keras.models.load_model(_MODEL_PATH, compile=False)
+    df = pd.read_csv(_CSV_PATH, header=None)
     encoder = LabelEncoder()
     encoder.fit(df.iloc[:, 63].values)
-    logging.info("Successfully loaded ASL model and label encoder.")
-
-    mp_hands = mp.solutions.hands
-    mp_drawing = mp.solutions.drawing_utils
-    hands = mp_hands.Hands(
-        static_image_mode=False,
-        max_num_hands=1,
-        min_detection_confidence=0.7,
-        min_tracking_confidence=0.7)
-    logging.info("Successfully initialized MediaPipe Hands.")
-
+    logging.info("ASL model, encoder, and HandLandmarker loaded successfully.")
 except Exception as e:
-    logging.error(f"Failed to load models or initialize MediaPipe: {e}")
+    logging.error(f"Failed to load models or initialize HandLandmarker: {e}")
+    hand_landmarker = None
     asl_model = None
-    hands = None
+    encoder = None
+
+# Per-client prediction buffers { sid: deque(maxlen=15) }
+client_buffers = {}
+
+
+def draw_hand_landmarks(frame, landmarks, w, h):
+    points = []
+    for lm in landmarks:
+        px, py = int(lm.x * w), int(lm.y * h)
+        points.append((px, py))
+        cv2.circle(frame, (px, py), 4, (0, 0, 255), -1)
+    for start, end in HAND_CONNECTIONS:
+        cv2.line(frame, points[start], points[end], (0, 255, 0), 2)
+
 
 # ============================================================================
-# WEBSOCKET TRANSLATION ENDPOINT
+# WEBSOCKET HANDLERS
 # ============================================================================
+@socketio.on('connect')
+def handle_connect():
+    client_buffers[request.sid] = deque(maxlen=SMOOTHING_WINDOW)
+    logging.info(f"Client connected: {request.sid}")
+
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    client_buffers.pop(request.sid, None)
+    logging.info(f"Client disconnected, buffer cleaned: {request.sid}")
+
+
 @socketio.on('video_frame')
 def handle_video_frame(data):
-    if not asl_model or not hands:
+    if not hand_landmarker or not asl_model:
         emit('translation_error', {'error': 'Backend models not loaded'})
         return
 
+    sid = request.sid
+    if sid not in client_buffers:
+        client_buffers[sid] = deque(maxlen=SMOOTHING_WINDOW)
+
     try:
-        # Decode the base64 image
+        # Decode base64 frame
         img_data = base64.b64decode(data.split(',')[1])
         nparr = np.frombuffer(img_data, np.uint8)
         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
-        # Process the frame with MediaPipe
+        h, w = frame.shape[:2]
+
+        # Run MediaPipe Tasks API (IMAGE mode — stateless, no timestamp needed)
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        rgb_frame.flags.writeable = False
-        results = hands.process(rgb_frame)
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+        results = hand_landmarker.detect(mp_image)
 
-        predicted_letter = ''
-        confidence_score = 0.0
+        detected_letter = None
+        if results.hand_landmarks:
+            for hand_lms in results.hand_landmarks:
+                draw_hand_landmarks(frame, hand_lms, w, h)
+            # Use the last detected hand for letter recognition
+            lms = results.hand_landmarks[-1]
+            flat = np.array([(lm.x, lm.y, lm.z) for lm in lms]).reshape(1, -1)
+            prediction = asl_model.predict(flat, verbose=0)
+            detected_letter = encoder.inverse_transform([np.argmax(prediction)])[0]
 
-        if results.multi_hand_landmarks:
-            for hand_landmarks in results.multi_hand_landmarks:
-                # Draw landmarks on the frame
-                mp_drawing.draw_landmarks(
-                    frame,
-                    hand_landmarks,
-                    mp_hands.HAND_CONNECTIONS,
-                    mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=2, circle_radius=4),
-                    mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2)
-                )
+        # Append to per-client smoothing buffer
+        client_buffers[sid].append(detected_letter)
 
-                # Convert landmarks to list of (x, y, z)
-                landmarks_list = [(lm.x, lm.y, lm.z) for lm in hand_landmarks.landmark]
-                
-                # Run recognition
-                flat = np.array([coord for point in landmarks_list for coord in point]).reshape(1, -1)
-                prediction = asl_model.predict(flat, verbose=0)
-                confidence_score = np.max(prediction)
-                predicted_letter = encoder.inverse_transform([np.argmax(prediction)])[0]
-        
-        # Encode the processed frame (with or without landmarks) back to base64
+        # 15-frame voting — require 60% agreement to display a letter
+        display_letter = ''
+        smoothed_confidence = 0.0
+        buf = client_buffers[sid]
+        if len(buf) == SMOOTHING_WINDOW:
+            votes = Counter(p for p in buf if p is not None)
+            if votes:
+                best_letter, best_count = votes.most_common(1)[0]
+                smoothed_confidence = best_count / SMOOTHING_WINDOW
+                if smoothed_confidence >= CONFIDENCE_THRESHOLD:
+                    display_letter = best_letter
+
+        # Encode annotated frame back to base64
         _, buffer = cv2.imencode('.jpeg', frame)
-        encoded_frame = base64.b64encode(buffer).decode('utf-8')
-        frame_url = f"data:image/jpeg;base64,{encoded_frame}"
+        frame_url = "data:image/jpeg;base64," + base64.b64encode(buffer).decode('utf-8')
 
-        # Send result back to client
         emit('translation_result', {
-            'letter': predicted_letter,
-            'confidence': float(confidence_score),
+            'letter': display_letter,
+            'confidence': float(smoothed_confidence),
             'frame': frame_url
         })
 
     except Exception as e:
-        logging.error(f"Error processing frame: {e}")
+        logging.error(f"Error processing frame for {sid}: {e}")
         emit('translation_error', {'error': 'Error processing frame on server'})
 
 
+# ============================================================================
+# AUTH ROUTES
+# ============================================================================
 @app.route('/register', methods=['POST'])
 def register_user():
-
     try:
         data = request.json
-        
         email = data.get('email')
         password = data.get('password')
-        
+
         try:
             user_record = auth.create_user(
                 email=email,
-                password=password,  
+                password=password,
                 email_verified=False
             )
             logging.info(f"Created Firebase Auth user: {user_record.uid}")
@@ -135,7 +198,7 @@ def register_user():
         except Exception as e:
             logging.error(f"Failed to create Firebase Auth user: {e}")
             return jsonify({"success": False, "error": "Failed to create user account"}), 500
-        
+
         try:
             user_profile = {
                 'uid': user_record.uid, 'email': email,
@@ -156,13 +219,13 @@ def register_user():
             try:
                 auth.delete_user(user_record.uid)
                 logging.info(f"Rolled back: Deleted Auth user {user_record.uid}")
-            except: pass
+            except Exception:
+                pass
             return jsonify({"success": False, "error": "Failed to create user profile"}), 500
     except Exception as e:
         logging.error(f"Registration error: {e}")
         return jsonify({"success": False, "error": "Registration failed"}), 500
 
-# ... (keep other routes like /login, /get-users, etc., they are unchanged)
 
 @app.route('/login', methods=['POST'])
 def login_user():
@@ -184,6 +247,7 @@ def login_user():
         logging.error(f"Login error: {e}")
         return jsonify({"success": False, "error": "Login failed"}), 500
 
+
 @app.route('/get-users', methods=['GET'])
 def get_users():
     try:
@@ -194,9 +258,9 @@ def get_users():
         logging.error(f"Error fetching users: {e}")
         return jsonify({"success": False, "error": str(e)}), 400
 
+
 # ============================================================================
 # RUN SERVER
 # ============================================================================
-
 if __name__ == '__main__':
-    socketio.run(app, debug=True, port=5000)
+    socketio.run(app, debug=True, host='0.0.0.0', port=5000)

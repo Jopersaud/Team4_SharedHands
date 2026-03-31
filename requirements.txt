@@ -1,0 +1,15 @@
+eventlet==0.36.1
+flask==3.0.3
+flask-cors==4.0.1
+flask-socketio==5.3.6
+python-socketio==5.11.2
+python-engineio==4.9.0
+firebase-admin==6.5.0
+mediapipe==0.10.14
+opencv-python-headless==4.9.0.80
+tf-keras==2.16.0
+tensorflow==2.16.1
+scikit-learn==1.4.2
+pandas==2.2.2
+numpy==1.26.4
+Pillow==10.3.0

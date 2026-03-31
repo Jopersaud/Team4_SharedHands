@@ -4,7 +4,7 @@ import Webcam from 'react-webcam';
 import io from 'socket.io-client';
 import { useSettings } from "../context/SettingsContext";
 
-const socket = io('http://100.91.247.124:5000');
+const socket = io('http://localhost:5000');
 
 export default function Dashboard() {
   const webcamRef = useRef(null);
@@ -13,6 +13,7 @@ export default function Dashboard() {
   const [confidence, setConfidence] = useState(0);
   const [processedFrame, setProcessedFrame] = useState('');
   const [cameraReady, setCameraReady] = useState(false);
+  const [currentWord, setCurrentWord] = useState('');
 
   const { cameraEnabled, selectedDeviceId, translationFontSize } = useSettings();
 
@@ -69,7 +70,6 @@ export default function Dashboard() {
     }, 200);
 
     return () => {
-      console.log('Cleaning up Dashboard component');
       clearInterval(intervalId);
       socket.off('connect');
       socket.off('disconnect');
@@ -78,9 +78,25 @@ export default function Dashboard() {
     };
   }, [cameraEnabled]);
 
+  // Keyboard word-building: Space = add letter, Backspace = delete, C = clear
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (predictedLetter) setCurrentWord(prev => prev + predictedLetter);
+      } else if (e.code === 'Backspace') {
+        e.preventDefault();
+        setCurrentWord(prev => prev.slice(0, -1));
+      } else if (e.key === 'c' || e.key === 'C') {
+        setCurrentWord('');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [predictedLetter]);
+
   return (
     <div style={styles.page}>
-
       <Navbar />
 
       <div style={styles.contentRow}>
@@ -99,12 +115,43 @@ export default function Dashboard() {
                   {predictedLetter}
                 </p>
                 <p style={styles.confidenceText}>
-                  Confidence: {(confidence * 100).toFixed(2)}%
+                  Confidence: {(confidence * 100).toFixed(1)}%
                 </p>
               </>
             ) : (
               <p style={styles.placeholder}>Show a hand sign to the camera...</p>
             )}
+          </div>
+
+          {/* Word buffer */}
+          <div style={styles.wordDisplay}>
+            <p style={styles.wordLabel}>Word</p>
+            <p style={styles.wordText}>{currentWord || '\u00A0'}</p>
+          </div>
+
+          {/* Word-building buttons */}
+          <div style={styles.buttonRow}>
+            <button
+              style={styles.wordBtn}
+              onClick={() => { if (predictedLetter) setCurrentWord(prev => prev + predictedLetter); }}
+              title="Space — add current letter"
+            >
+              + Letter
+            </button>
+            <button
+              style={styles.wordBtn}
+              onClick={() => setCurrentWord(prev => prev.slice(0, -1))}
+              title="Backspace"
+            >
+              ← Back
+            </button>
+            <button
+              style={{...styles.wordBtn, backgroundColor: '#ef4444'}}
+              onClick={() => setCurrentWord('')}
+              title="Clear word"
+            >
+              Clear
+            </button>
           </div>
         </div>
 
@@ -211,6 +258,49 @@ const styles = {
     color: "#6b9fd4",
     fontStyle: "italic",
     margin: 0,
+  },
+  wordDisplay: {
+    backgroundColor: "#eff6ff",
+    borderRadius: "10px",
+    padding: "10px 14px",
+    marginTop: "12px",
+    minHeight: "48px",
+    border: "1px solid #bfdbfe",
+    flexShrink: 0,
+  },
+  wordLabel: {
+    fontSize: "11px",
+    fontWeight: "600",
+    textTransform: "uppercase",
+    color: "#1d4ed8",
+    margin: "0 0 4px 0",
+    letterSpacing: "0.6px",
+  },
+  wordText: {
+    fontSize: "28px",
+    fontWeight: "600",
+    color: "#1e3a8a",
+    margin: 0,
+    letterSpacing: "3px",
+    wordBreak: "break-all",
+  },
+  buttonRow: {
+    display: "flex",
+    gap: "8px",
+    marginTop: "10px",
+    flexShrink: 0,
+  },
+  wordBtn: {
+    flex: 1,
+    padding: "8px 4px",
+    borderRadius: "8px",
+    border: "none",
+    backgroundColor: "#1d4ed8",
+    color: "#ffffff",
+    fontFamily: "'Poppins', sans-serif",
+    fontWeight: "600",
+    fontSize: "12px",
+    cursor: "pointer",
   },
   videoPanel: {
     flex: "1 1 75%",
