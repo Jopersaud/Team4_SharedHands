@@ -4,7 +4,7 @@ import Webcam from 'react-webcam';
 import io from 'socket.io-client';
 import { useSettings } from "../context/SettingsContext";
 
-const socket = io('http://localhost:5000');
+const socket = io('http://localhost:5000', { transports: ['websocket'] });
 
 export default function Dashboard() {
   const webcamRef = useRef(null);
@@ -67,7 +67,7 @@ export default function Dashboard() {
           socket.emit('video_frame', imageSrc);
         }
       }
-    }, 200);
+    }, 500);
 
     return () => {
       clearInterval(intervalId);

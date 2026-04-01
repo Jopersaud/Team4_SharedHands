@@ -17,7 +17,7 @@
     "react-router-dom": "^6.30.3",
     "react-scripts": "^5.0.1",
     "react-webcam": "^7.2.0",
-    "socketio": "^1.0.0",
+    "socket.io-client": "^4.8.3",
     "web-vitals": "^2.1.4"
   },
   "proxy": "http://localhost:5000",

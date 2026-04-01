@@ -25,3 +25,8 @@ yarn-error.log*
 firebaseConfig.js
 "`nSharedHandsAdminKey.json"
 SharedHandsAdminKey.json
+sharedhandsadminkey.json
+artifacts/asl_landmarks.csv
+artifacts/asl_model.keras
+artifacts/debug.log
+artifacts/test_imports.py

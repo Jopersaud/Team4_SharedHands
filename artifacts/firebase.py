@@ -1,5 +1,6 @@
 import eventlet
-eventlet.monkey_patch()
+import eventlet.tpool
+eventlet.monkey_patch(os=True, select=True, socket=True, thread=False, time=True)
 
 import firebase_admin
 from firebase_admin import credentials, firestore, storage, auth
@@ -26,19 +27,19 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # ============================================================================
 KEY_PATH = os.environ.get(
     "FIREBASE_KEY_PATH",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "SharedHandsAdminKey.json")
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "sharedhandsadminkey.json")
 )
 cred = credentials.Certificate(KEY_PATH)
 
 firebase_admin.initialize_app(cred, {
-    'storageBucket': 'sharedhands-f232b.appspot.com'
+    'storageBucket': 'sharedhands-17f7b.appspot.com'
 })
 
 db = firestore.client()
 
 app = Flask(__name__)
 CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', ping_timeout=60, ping_interval=25)
 
 # ============================================================================
 # ASL MODEL AND MEDIAPIPE TASKS API SETUP
@@ -125,49 +126,49 @@ def handle_video_frame(data):
         client_buffers[sid] = deque(maxlen=SMOOTHING_WINDOW)
 
     try:
-        # Decode base64 frame
-        img_data = base64.b64decode(data.split(',')[1])
-        nparr = np.frombuffer(img_data, np.uint8)
-        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        h, w = frame.shape[:2]
+        def process():
+            # Decode base64 frame
+            img_data = base64.b64decode(data.split(',')[1])
+            nparr = np.frombuffer(img_data, np.uint8)
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            h, w = frame.shape[:2]
 
-        # Run MediaPipe Tasks API (IMAGE mode — stateless, no timestamp needed)
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
-        results = hand_landmarker.detect(mp_image)
+            # Run MediaPipe Tasks API (IMAGE mode — stateless, no timestamp needed)
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+            results = hand_landmarker.detect(mp_image)
 
-        detected_letter = None
-        if results.hand_landmarks:
-            for hand_lms in results.hand_landmarks:
-                draw_hand_landmarks(frame, hand_lms, w, h)
-            # Use the last detected hand for letter recognition
-            lms = results.hand_landmarks[-1]
-            flat = np.array([(lm.x, lm.y, lm.z) for lm in lms]).reshape(1, -1)
-            prediction = asl_model.predict(flat, verbose=0)
-            detected_letter = encoder.inverse_transform([np.argmax(prediction)])[0]
+            detected_letter = None
+            if results.hand_landmarks:
+                for hand_lms in results.hand_landmarks:
+                    draw_hand_landmarks(frame, hand_lms, w, h)
+                lms = results.hand_landmarks[-1]
+                flat = np.array([(lm.x, lm.y, lm.z) for lm in lms]).reshape(1, -1)
+                prediction = asl_model.predict(flat, verbose=0)
+                detected_letter = encoder.inverse_transform([np.argmax(prediction)])[0]
 
-        # Append to per-client smoothing buffer
-        client_buffers[sid].append(detected_letter)
+            client_buffers[sid].append(detected_letter)
 
-        # 15-frame voting — require 60% agreement to display a letter
-        display_letter = ''
-        smoothed_confidence = 0.0
-        buf = client_buffers[sid]
-        if len(buf) == SMOOTHING_WINDOW:
-            votes = Counter(p for p in buf if p is not None)
-            if votes:
-                best_letter, best_count = votes.most_common(1)[0]
-                smoothed_confidence = best_count / SMOOTHING_WINDOW
-                if smoothed_confidence >= CONFIDENCE_THRESHOLD:
-                    display_letter = best_letter
+            display_letter = ''
+            smoothed_confidence = 0.0
+            buf = client_buffers[sid]
+            if len(buf) == SMOOTHING_WINDOW:
+                votes = Counter(p for p in buf if p is not None)
+                if votes:
+                    best_letter, best_count = votes.most_common(1)[0]
+                    smoothed_confidence = best_count / SMOOTHING_WINDOW
+                    if smoothed_confidence >= CONFIDENCE_THRESHOLD:
+                        display_letter = best_letter
 
-        # Encode annotated frame back to base64
-        _, buffer = cv2.imencode('.jpeg', frame)
-        frame_url = "data:image/jpeg;base64," + base64.b64encode(buffer).decode('utf-8')
+            _, buffer = cv2.imencode('.jpeg', frame)
+            frame_url = "data:image/jpeg;base64," + base64.b64encode(buffer).decode('utf-8')
+            return display_letter, float(smoothed_confidence), frame_url
+
+        display_letter, smoothed_confidence, frame_url = eventlet.tpool.execute(process)
 
         emit('translation_result', {
             'letter': display_letter,
-            'confidence': float(smoothed_confidence),
+            'confidence': smoothed_confidence,
             'frame': frame_url
         })
 
@@ -211,7 +212,7 @@ def register_user():
                 },
                 'organizationId': None, 'organizationRole': None,
             }
-            db.collection('users').document(user_record.uid).set(user_profile)
+            eventlet.tpool.execute(lambda: db.collection('users').document(user_record.uid).set(user_profile))
             logging.info(f"Created Firestore profile for user: {user_record.uid}")
             return jsonify({"success": True, "message": "User registered successfully", "uid": user_record.uid, "email": email}), 201
         except Exception as e:
@@ -234,13 +235,13 @@ def login_user():
         uid = data.get('uid')
         if not uid:
             return jsonify({"success": False, "error": "User ID required"}), 400
-        user_doc = db.collection('users').document(uid).get()
+        user_doc = eventlet.tpool.execute(lambda: db.collection('users').document(uid).get())
         if not user_doc.exists:
             return jsonify({"success": False, "error": "User profile not found"}), 404
         user_data = user_doc.to_dict()
         if user_data.get('accountStatus') != 'active':
             return jsonify({"success": False, "error": "Account is not active"}), 403
-        db.collection('users').document(uid).update({'lastLoginAt': firestore.SERVER_TIMESTAMP})
+        eventlet.tpool.execute(lambda: db.collection('users').document(uid).update({'lastLoginAt': firestore.SERVER_TIMESTAMP}))
         logging.info(f"User logged in: {uid}")
         return jsonify({"success": True, "user": user_data}), 200
     except Exception as e:
