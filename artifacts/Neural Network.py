@@ -1,3 +1,4 @@
+# this is simply how a neural network would be set up
 import tensorflow as tf
 from tensorflow import keras
 import numpy as np
