@@ -36,7 +36,7 @@ class TransformerBLock(keras.layers.Layer):
         self.norm1 = keras.layers.LayerNormalization(epsilon=1e-6)
         self.norm2 = keras.layers.LayerNormalization(epsilon=1e-6)
         self.ff1 = keras.layers.Dense(ff_dim, activation="relu")
-        self.ff2 = None # fuck me
+        self.ff2 = None # cooked
 
     def build(self, input_shape):
         self.ff2 = keras.layers.Dense(input_shape[-1])
