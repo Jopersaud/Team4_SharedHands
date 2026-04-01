@@ -118,7 +118,7 @@ const styles = {
     flexDirection: "column",
     alignItems: "center",
     padding: "0 24px 16px 24px",
-    background: "linear-gradient(180deg, #0ea5e9 0%, #7dd3fc 40%, #ffffff 100%)",
+    background: "linear-gradient(180deg, #0ea5e9 0%, #7dd3fc 30%, #ffffff 65%, #ffffff 100%)",
     fontFamily: "'Poppins', sans-serif",
     boxSizing: "border-box",
   },

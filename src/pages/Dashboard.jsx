@@ -15,7 +15,7 @@ export default function Dashboard() {
   const [cameraReady, setCameraReady] = useState(false);
   const [currentWord, setCurrentWord] = useState('');
 
-  const { cameraEnabled, selectedDeviceId, translationFontSize } = useSettings();
+  const { cameraEnabled, setCameraEnabled, selectedDeviceId, translationFontSize } = useSettings();
 
   // Inject Google Font
   useEffect(() => {
@@ -59,7 +59,6 @@ export default function Dashboard() {
       setError('A translation error occurred on the server.');
     });
 
-    // Frame-sending interval — only sends if camera is enabled
     const intervalId = setInterval(() => {
       if (socket.connected && webcamRef.current && cameraEnabled) {
         const imageSrc = webcamRef.current.getScreenshot();
@@ -110,7 +109,6 @@ export default function Dashboard() {
               <p style={{ ...styles.placeholder, color: 'red' }}>{error}</p>
             ) : predictedLetter ? (
               <>
-                {/* Font size driven by settings context */}
                 <p style={{ ...styles.translationText, fontSize: `${translationFontSize}px` }}>
                   {predictedLetter}
                 </p>
@@ -134,7 +132,7 @@ export default function Dashboard() {
             <button
               style={styles.wordBtn}
               onClick={() => { if (predictedLetter) setCurrentWord(prev => prev + predictedLetter); }}
-              title="Space — add current letter"
+              title="Add current letter"
             >
               + Letter
             </button>
@@ -146,7 +144,7 @@ export default function Dashboard() {
               ← Back
             </button>
             <button
-              style={{...styles.wordBtn, backgroundColor: '#ef4444'}}
+              style={{ ...styles.wordBtn, backgroundColor: '#ef4444' }}
               onClick={() => setCurrentWord('')}
               title="Clear word"
             >
@@ -161,7 +159,6 @@ export default function Dashboard() {
 
           {cameraEnabled ? (
             <>
-              {/* Webcam — uses selectedDeviceId from settings if available */}
               <Webcam
                 audio={false}
                 ref={webcamRef}
@@ -175,7 +172,6 @@ export default function Dashboard() {
                 }}
               />
 
-              {/* Processed frame from backend */}
               {processedFrame && (
                 <img
                   src={processedFrame}
@@ -184,7 +180,6 @@ export default function Dashboard() {
                 />
               )}
 
-              {/* Waiting message */}
               {!cameraReady && !error && (
                 <div style={styles.waitingOverlay}>
                   Waiting for camera...
@@ -192,8 +187,17 @@ export default function Dashboard() {
               )}
             </>
           ) : (
+            /* Camera disabled — show activate button instead of text */
             <div style={styles.disabledOverlay}>
-              Camera is disabled. Enable it in Settings ⚙
+              <button
+                style={styles.activateButton}
+                onClick={() => setCameraEnabled(true)}
+              >
+                Click to Activate Camera
+              </button>
+              <p style={styles.activateHint}>
+                You can also manage camera access in Settings ⚙
+              </p>
             </div>
           )}
         </div>
@@ -210,7 +214,7 @@ const styles = {
     flexDirection: "column",
     alignItems: "center",
     padding: "0 24px 16px 24px",
-    background: "linear-gradient(180deg, #0ea5e9 0%, #7dd3fc 40%, #ffffff 100%)",
+   background: "linear-gradient(180deg, #0ea5e9 0%, #7dd3fc 30%, #ffffff 65%, #ffffff 100%)",
     fontFamily: "'Poppins', sans-serif",
     boxSizing: "border-box",
   },
@@ -333,14 +337,31 @@ const styles = {
   disabledOverlay: {
     flex: 1,
     display: "flex",
+    flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: "15px",
-    color: "#6b9fd4",
-    fontStyle: "italic",
-    textAlign: "center",
+    gap: "14px",
     borderRadius: "10px",
     backgroundColor: "rgba(0,0,0,0.04)",
+  },
+  activateButton: {
+    padding: "14px 32px",
+    fontSize: "15px",
+    fontWeight: "600",
+    backgroundColor: "#0ea5e9",
+    color: "#ffffff",
+    border: "none",
+    borderRadius: "30px",
+    cursor: "pointer",
+    fontFamily: "'Poppins', sans-serif",
+    letterSpacing: "0.4px",
+    boxShadow: "0 4px 14px rgba(14,165,233,0.4)",
+  },
+  activateHint: {
+    fontSize: "13px",
+    color: "#6b9fd4",
+    fontStyle: "italic",
+    margin: 0,
   },
   panelLabel: {
     margin: "0 0 10px 0",

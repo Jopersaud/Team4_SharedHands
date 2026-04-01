@@ -111,7 +111,7 @@ export default function Navbar() {
                 onChange={(e) => setSelectedDeviceId(e.target.value)}
               >
                 {availableDevices.map((device, i) => (
-                  <option key={device.deviceId} value={device.deviceId}>
+                  <option key={device.deviceId} value={device.deviceId} style={{ backgroundColor: "#1e3a8a", color: "#ffffff" }}>
                     {device.label || `Camera ${i + 1}`}
                   </option>
                 ))}
@@ -240,7 +240,6 @@ const styles = {
     right: 0,
     width: "300px",
     height: "100vh",
-    borderRadius: "20px 0px 0px 20px",
     backgroundColor: "#1e3a8a",
     boxShadow: "-4px 0 20px rgba(0,0,0,0.3)",
     zIndex: 200,
@@ -343,7 +342,7 @@ const styles = {
     padding: "8px 10px",
     borderRadius: "8px",
     border: "1px solid rgba(255,255,255,0.2)",
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "#1e3a8a",
     color: "#ffffff",
     fontSize: "13px",
     fontFamily: "'Poppins', sans-serif",
