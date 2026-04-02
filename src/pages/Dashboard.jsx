@@ -1,21 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import Navbar from "../components/Navbar";
 import Webcam from 'react-webcam';
-import io from 'socket.io-client';
 import { useSettings } from "../context/SettingsContext";
-
-const socket = io('http://localhost:5000');
+import { useASLTranslation } from "../hooks/useASLTranslation";
 
 export default function Dashboard() {
   const webcamRef = useRef(null);
+  const canvasRef = useRef(null);
   const [error, setError] = useState(null);
-  const [predictedLetter, setPredictedLetter] = useState('');
-  const [confidence, setConfidence] = useState(0);
-  const [processedFrame, setProcessedFrame] = useState('');
   const [cameraReady, setCameraReady] = useState(false);
   const [currentWord, setCurrentWord] = useState('');
 
   const { cameraEnabled, selectedDeviceId, translationFontSize } = useSettings();
+
+  const { detectedLetter, confidence, isReady } = useASLTranslation({
+    videoRef: webcamRef,
+    canvasRef,
+    enabled: cameraEnabled,
+  });
 
   // Inject Google Font
   useEffect(() => {
@@ -25,57 +27,11 @@ export default function Dashboard() {
     document.head.appendChild(link);
   }, []);
 
-  // Reset processed frame when camera is disabled
+  // Reset camera state when camera is disabled
   useEffect(() => {
     if (!cameraEnabled) {
-      setProcessedFrame('');
       setCameraReady(false);
-      setPredictedLetter('');
-      setConfidence(0);
     }
-  }, [cameraEnabled]);
-
-  useEffect(() => {
-    socket.on('connect', () => {
-      console.log('Connected to backend');
-      setError(null);
-    });
-
-    socket.on('disconnect', () => {
-      console.log('Disconnected from backend');
-      setError('Connection to server lost.');
-    });
-
-    socket.on('translation_result', (data) => {
-      setPredictedLetter(data.letter);
-      setConfidence(data.confidence);
-      if (data.frame) {
-        setProcessedFrame(data.frame);
-      }
-    });
-
-    socket.on('translation_error', (data) => {
-      console.error('Translation error:', data.error);
-      setError('A translation error occurred on the server.');
-    });
-
-    // Frame-sending interval — only sends if camera is enabled
-    const intervalId = setInterval(() => {
-      if (socket.connected && webcamRef.current && cameraEnabled) {
-        const imageSrc = webcamRef.current.getScreenshot();
-        if (imageSrc) {
-          socket.emit('video_frame', imageSrc);
-        }
-      }
-    }, 200);
-
-    return () => {
-      clearInterval(intervalId);
-      socket.off('connect');
-      socket.off('disconnect');
-      socket.off('translation_result');
-      socket.off('translation_error');
-    };
   }, [cameraEnabled]);
 
   // Keyboard word-building: Space = add letter, Backspace = delete, C = clear
@@ -83,7 +39,7 @@ export default function Dashboard() {
     const handleKeyDown = (e) => {
       if (e.code === 'Space') {
         e.preventDefault();
-        if (predictedLetter) setCurrentWord(prev => prev + predictedLetter);
+        if (detectedLetter) setCurrentWord(prev => prev + detectedLetter);
       } else if (e.code === 'Backspace') {
         e.preventDefault();
         setCurrentWord(prev => prev.slice(0, -1));
@@ -93,7 +49,7 @@ export default function Dashboard() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [predictedLetter]);
+  }, [detectedLetter]);
 
   return (
     <div style={styles.page}>
@@ -108,11 +64,10 @@ export default function Dashboard() {
               <p style={styles.placeholder}>Camera is disabled.</p>
             ) : error ? (
               <p style={{ ...styles.placeholder, color: 'red' }}>{error}</p>
-            ) : predictedLetter ? (
+            ) : detectedLetter ? (
               <>
-                {/* Font size driven by settings context */}
                 <p style={{ ...styles.translationText, fontSize: `${translationFontSize}px` }}>
-                  {predictedLetter}
+                  {detectedLetter}
                 </p>
                 <p style={styles.confidenceText}>
                   Confidence: {(confidence * 100).toFixed(1)}%
@@ -133,7 +88,7 @@ export default function Dashboard() {
           <div style={styles.buttonRow}>
             <button
               style={styles.wordBtn}
-              onClick={() => { if (predictedLetter) setCurrentWord(prev => prev + predictedLetter); }}
+              onClick={() => { if (detectedLetter) setCurrentWord(prev => prev + detectedLetter); }}
               title="Space — add current letter"
             >
               + Letter
@@ -160,8 +115,7 @@ export default function Dashboard() {
           <p style={styles.panelLabel}>Video Display</p>
 
           {cameraEnabled ? (
-            <>
-              {/* Webcam — uses selectedDeviceId from settings if available */}
+            <div style={styles.videoWrapper}>
               <Webcam
                 audio={false}
                 ref={webcamRef}
@@ -169,28 +123,16 @@ export default function Dashboard() {
                 videoConstraints={selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : true}
                 onUserMedia={() => setCameraReady(true)}
                 onUserMediaError={() => setError('Camera access denied or not found.')}
-                style={{
-                  ...styles.video,
-                  display: processedFrame ? 'none' : 'block',
-                }}
+                style={styles.video}
               />
-
-              {/* Processed frame from backend */}
-              {processedFrame && (
-                <img
-                  src={processedFrame}
-                  alt="Processed Webcam Feed"
-                  style={styles.video}
-                />
-              )}
-
-              {/* Waiting message */}
+              <canvas ref={canvasRef} style={styles.canvasOverlay} />
               {!cameraReady && !error && (
-                <div style={styles.waitingOverlay}>
-                  Waiting for camera...
-                </div>
+                <div style={styles.waitingOverlay}>Waiting for camera...</div>
               )}
-            </>
+              {cameraReady && !isReady && (
+                <div style={styles.waitingOverlay}>Loading ASL model...</div>
+              )}
+            </div>
           ) : (
             <div style={styles.disabledOverlay}>
               Camera is disabled. Enable it in Settings ⚙
@@ -313,13 +255,28 @@ const styles = {
     overflow: "hidden",
     position: "relative",
   },
+  videoWrapper: {
+    position: "relative",
+    flex: 1,
+    minHeight: 0,
+    borderRadius: "10px",
+    overflow: "hidden",
+    backgroundColor: "#000",
+  },
   video: {
     width: "100%",
-    flex: 1,
+    height: "100%",
     borderRadius: "10px",
     objectFit: "cover",
-    backgroundColor: "#000",
-    minHeight: 0,
+    display: "block",
+  },
+  canvasOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    pointerEvents: "none",
   },
   waitingOverlay: {
     position: "absolute",
