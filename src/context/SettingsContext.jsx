@@ -25,6 +25,7 @@ export function SettingsProvider({ children }) {
       }
     };
     getDevices();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

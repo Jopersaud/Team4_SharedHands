@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # ============================================================================
 KEY_PATH = os.environ.get(
     "FIREBASE_KEY_PATH",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "SharedHandsAdminKey.json")
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "SharedHandsAdminKey.json")
 )
 cred = credentials.Certificate(KEY_PATH)
 

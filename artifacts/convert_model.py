@@ -12,7 +12,8 @@ http://localhost:3000/asl_model/model.json in the browser.
 """
 import os
 import tensorflowjs as tfjs
-import tf_keras as keras
+import tensorflow as tf
+keras = tf.keras
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 MODEL_IN  = os.path.join(BASE, "asl_model.keras")

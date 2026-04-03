@@ -13,7 +13,7 @@ export default function Dashboard() {
 
   const { cameraEnabled, selectedDeviceId, translationFontSize } = useSettings();
 
-  const { detectedLetter, confidence, isReady } = useASLTranslation({
+  const { detectedLetter, confidence, motionGesture, motionConfidence, isReady } = useASLTranslation({
     videoRef: webcamRef,
     canvasRef,
     enabled: cameraEnabled,
@@ -72,6 +72,11 @@ export default function Dashboard() {
                 <p style={styles.confidenceText}>
                   Confidence: {(confidence * 100).toFixed(1)}%
                 </p>
+                {motionGesture && (
+                  <p style={styles.motionText}>
+                    Motion: {motionGesture} ({(motionConfidence * 100).toFixed(0)}%)
+                  </p>
+                )}
               </>
             ) : (
               <p style={styles.placeholder}>Show a hand sign to the camera...</p>
@@ -194,6 +199,12 @@ const styles = {
     fontSize: "20px",
     color: "#1d4ed8",
     margin: 0,
+  },
+  motionText: {
+    fontSize: "14px",
+    color: "#7c3aed",
+    marginTop: "8px",
+    fontWeight: "600",
   },
   placeholder: {
     fontSize: "16px",

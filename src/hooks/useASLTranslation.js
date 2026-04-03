@@ -4,8 +4,10 @@ import * as tf from '@tensorflow/tfjs';
 
 // Mirror of Python backend constants
 const LABELS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''); // LabelEncoder sorts alphabetically → A=0 … Z=25
-const SMOOTHING_WINDOW = 15;
-const CONFIDENCE_THRESHOLD = 0.6;
+const TRANSFORMER_CLASSES = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','SORRY','T','THANKYOU','U','V','W','X','Y','Z'];
+const SMOOTHING_WINDOW = 10;
+const CONFIDENCE_THRESHOLD = 0.5;
+const SEQUENCE_LENGTH = 30; // frames for transformer
 const HAND_CONNECTIONS = [
   [0,1],[1,2],[2,3],[3,4],
   [0,5],[5,6],[6,7],[7,8],
@@ -46,12 +48,18 @@ function drawLandmarks(ctx, landmarks, w, h) {
 export function useASLTranslation({ videoRef, canvasRef, enabled }) {
   const [detectedLetter, setDetectedLetter] = useState('');
   const [confidence, setConfidence] = useState(0);
+  const [motionGesture, setMotionGesture] = useState('');
+  const [motionConfidence, setMotionConfidence] = useState(0);
   const [isReady, setIsReady] = useState(false);
 
   const handLandmarkerRef = useRef(null);
   const modelRef = useRef(null);
+  const transformerModelRef = useRef(null);
   const predictionBufferRef = useRef([]); // rolling array, capped at SMOOTHING_WINDOW
+  const sequenceBufferRef = useRef([]);   // rolling array, capped at SEQUENCE_LENGTH
+  const frameCountRef = useRef(0);
   const rafIdRef = useRef(null);
+  const lastCanvasSizeRef = useRef({ w: 0, h: 0 });
 
   // ── Initialise MediaPipe and TF.js model once on mount ──────────────────────
   useEffect(() => {
@@ -67,17 +75,19 @@ export function useASLTranslation({ videoRef, canvasRef, enabled }) {
           modelAssetPath: '/hand_landmarker.task', // served from public/
           delegate: 'GPU',                          // auto-falls back to CPU
         },
-        runningMode: 'IMAGE', // stateless — matches Python VisionRunningMode.IMAGE
+        runningMode: 'VIDEO', // temporal tracking — smoother landmarks across frames
         numHands: 4,
         minHandDetectionConfidence: 0.7,
         minHandPresenceConfidence: 0.7,
       });
 
       const model = await tf.loadLayersModel('/asl_model/model.json');
+      const transformerModel = await tf.loadGraphModel('/asl_transformer_model/model.json');
 
       if (!cancelled) {
         handLandmarkerRef.current = landmarker;
         modelRef.current = model;
+        transformerModelRef.current = transformerModel;
         setIsReady(true);
       }
     }
@@ -93,28 +103,48 @@ export function useASLTranslation({ videoRef, canvasRef, enabled }) {
     const canvas = canvasRef.current;
     const landmarker = handLandmarkerRef.current;
     const model = modelRef.current;
+    const transformerModel = transformerModelRef.current;
 
-    if (!video || !canvas || !landmarker || !model || video.readyState < 2) {
+    if (!video || !canvas || !landmarker || !model || !transformerModel || video.readyState < 2) {
       rafIdRef.current = requestAnimationFrame(processFrame);
       return;
     }
 
-    const w = video.videoWidth;
-    const h = video.videoHeight;
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, w, h);
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
 
-    const results = landmarker.detect(video);
+    // Only reset canvas dimensions on resize (prevents flicker every frame)
+    const cw = canvas.clientWidth;
+    const ch = canvas.clientHeight;
+    const last = lastCanvasSizeRef.current;
+    if (canvas.width !== cw || canvas.height !== ch) {
+      canvas.width = cw;
+      canvas.height = ch;
+      last.w = cw;
+      last.h = ch;
+    }
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, cw, ch);
+
+    // Compute objectFit:cover scale + offset so landmarks align with the video
+    const scale = Math.max(cw / vw, ch / vh);
+    const ox = (cw - vw * scale) / 2;
+    const oy = (ch - vh * scale) / 2;
+    const w = vw * scale;
+    const h = vh * scale;
+
+    const results = landmarker.detectForVideo(video, performance.now());
 
     let detectedThisFrame = null;
 
     if (results.landmarks && results.landmarks.length > 0) {
-      // Draw all detected hands
+      // Draw all detected hands (translate canvas to cover-crop origin)
+      ctx.save();
+      ctx.translate(ox, oy);
       for (const handLandmarks of results.landmarks) {
         drawLandmarks(ctx, handLandmarks, w, h);
       }
+      ctx.restore();
 
       // Use last hand — mirrors Python: results.hand_landmarks[-1]
       const lms = results.landmarks[results.landmarks.length - 1];
@@ -133,6 +163,25 @@ export function useASLTranslation({ videoRef, canvasRef, enabled }) {
       detectedThisFrame = LABELS[argmax];
       inputTensor.dispose();
       prediction.dispose();
+
+      // Append frame to sequence buffer for transformer
+      const seq = sequenceBufferRef.current;
+      seq.push(Array.from(flat));
+      if (seq.length > SEQUENCE_LENGTH) seq.shift();
+    }
+
+    // Transformer: run every 30 frames when sequence buffer is full
+    frameCountRef.current += 1;
+    const seq = sequenceBufferRef.current;
+    if (seq.length === SEQUENCE_LENGTH && frameCountRef.current % SEQUENCE_LENGTH === 0) {
+      const seqTensor = tf.tensor3d([seq], [1, SEQUENCE_LENGTH, 63]);
+      const transPred = transformerModel.predict(seqTensor);
+      const transArgmax = transPred.argMax(1).dataSync()[0];
+      const transConf = transPred.dataSync()[transArgmax];
+      seqTensor.dispose();
+      transPred.dispose();
+      setMotionGesture(TRANSFORMER_CLASSES[transArgmax]);
+      setMotionConfidence(transConf);
     }
 
     // Temporal smoothing — fixed-size ring buffer
@@ -174,7 +223,11 @@ export function useASLTranslation({ videoRef, canvasRef, enabled }) {
       if (!enabled) {
         setDetectedLetter('');
         setConfidence(0);
+        setMotionGesture('');
+        setMotionConfidence(0);
         predictionBufferRef.current = [];
+        sequenceBufferRef.current = [];
+        frameCountRef.current = 0;
       }
       return;
     }
@@ -188,5 +241,5 @@ export function useASLTranslation({ videoRef, canvasRef, enabled }) {
     };
   }, [isReady, enabled, processFrame]);
 
-  return { detectedLetter, confidence, isReady };
+  return { detectedLetter, confidence, motionGesture, motionConfidence, isReady };
 }
