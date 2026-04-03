@@ -1,11 +1,12 @@
 import cv2
 import mediapipe as mp
 import numpy as np
-from collections import deque
 import keras
 from sklearn.preprocessing import LabelEncoder
 import pandas as pd
 from collections import deque, Counter
+import json
+import time
 
 SMOOTHING_WINDOW = 15
 CONFIDENCE_THRESHOLD = 0.6
@@ -15,13 +16,47 @@ mp_drawing = mp.solutions.drawing_utils
 
 hands = mp_hands.Hands(
     static_image_mode=False,
-    max_num_hands=4,
+    max_num_hands=2,
     min_detection_confidence=0.7,
     min_tracking_confidence=0.7
 )
 
 model = keras.models.load_model("asl_model.keras")
 
+
+class TransformerBLock(keras.layers.Layer):
+    def __init__(self, num_heads=4, key_dim=16, ff_dim=128, dropout=0.1, **kwargs):
+        super().__init__(**kwargs)
+        self.attention = keras.layers.MultiHeadAttention(num_heads=num_heads, key_dim=key_dim)
+        self.dropout1 = keras.layers.Dropout(dropout)
+        self.dropout2 = keras.layers.Dropout(dropout)
+        self.norm1 = keras.layers.LayerNormalization(epsilon=1e-6)
+        self.norm2 = keras.layers.LayerNormalization(epsilon=1e-6)
+        self.ff1 = keras.layers.Dense(ff_dim, activation="relu")
+        self.ff2 = None  # fuck me
+
+    def build(self, input_shape):
+        self.ff2 = keras.layers.Dense(input_shape[-1])
+        super().build(input_shape)
+
+    def call(self, x, training=False):
+        attn_output = self.attention(x, x)
+        attn_output = self.dropout1(attn_output, training=training)
+        x = self.norm1(x + attn_output)
+
+        ff_output = self.ff1(x)
+        ff_output = self.ff2(ff_output)
+        ff_output = self.dropout2(ff_output, training=training)
+        x = self.norm2(x + ff_output)
+
+        return x
+
+
+transformer_model = keras.models.load_model(
+    "asl_transformer.keras",
+    custom_objects={"TransformerBLock": TransformerBLock}
+)
+transformer_classes = np.load("Transformer_classes.npy", allow_pickle=True)
 df = pd.read_csv("asl_landmarks.csv", header=None)
 encoder = LabelEncoder()
 encoder.fit(df.iloc[:, 63].values)
@@ -36,6 +71,11 @@ prediction_buffer = deque(maxlen=SMOOTHING_WINDOW)
 display_letter = ""
 confidence_score = 0
 word = ""
+sequence_buffer = deque(maxlen=30)
+transformer_prediction = ""
+transformer_confidence = 0
+frame_count = 0
+prev_time = time.time()
 
 print("Welcome... Press Q to quit")
 print("Now please show your hand and start signing!!")
@@ -45,6 +85,7 @@ while cap.isOpened():
     if not ret:
         break
 
+    frame_count += 1
     frame = cv2.flip(frame, 1)
     h, w = frame.shape[:2]
 
@@ -69,6 +110,8 @@ while cap.isOpened():
 
         # Run recognition
         flat = np.array([coord for point in landmarks_list for coord in point]).reshape(1, -1)
+        flat_seq = [coord for point in landmarks_list for coord in point]
+        sequence_buffer.append(flat_seq)
         prediction = model.predict(flat, verbose=0)
         confidence_score = np.max(prediction) * 100
         detected_letter = encoder.inverse_transform([np.argmax(prediction)])[0]
@@ -86,6 +129,12 @@ while cap.isOpened():
                 display_letter = ""
         else:
             display_letter = ""
+
+    if len(sequence_buffer) == 30 and frame_count % 30 == 0:
+        seq_input = np.array(sequence_buffer).reshape(1, 30, 63)
+        trans_pred = transformer_model.predict(seq_input, verbose=0)
+        transformer_confidence = np.max(trans_pred) * 100
+        transformer_prediction = transformer_classes[np.argmax(trans_pred)]
 
     key = cv2.waitKey(1) & 0xFF
     if key == ord(' ') and display_letter:
@@ -118,6 +167,10 @@ while cap.isOpened():
     if display_letter:
         cv2.putText(frame, f"letter: {display_letter} ({confidence_score:.0f}%)", (w // 2 - 80, 155),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 2)
+    if transformer_prediction:
+        cv2.putText(frame, f"Motion: {transformer_prediction} ({transformer_confidence}%)", (20, 155),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 200, 0), 2)
+
     else:
         cv2.putText(frame, "letter: -", (20, 80),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.4, (150, 150, 250), 2)
@@ -134,6 +187,11 @@ while cap.isOpened():
     cv2.putText(frame, "SPACE = add B = backspace C= clear", (20, h - 35),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 180), 1)
 
+    curr_time = time.time()
+    fps = 1 / (curr_time - prev_time + 1e-6)
+    prev_time = curr_time
+    cv2.putText(frame, f"FPS: {fps:.0f}", (w - 120, 70),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 2)
     # Show frame
     cv2.imshow("ASL Testing", frame)
 
