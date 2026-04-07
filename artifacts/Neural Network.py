@@ -1,4 +1,8 @@
 # this is simply how a neural network would be set up
+# DO NOT DOWNLOAD THIS FILE
+# THIS IS NOT THE ACTUAL NEURAL NETWORK
+# CHECK train_the_model_asl.py
+# AND train_the_transformer.py
 import tensorflow as tf
 from tensorflow import keras
 import numpy as np
