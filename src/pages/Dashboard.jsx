@@ -11,7 +11,7 @@ export default function Dashboard() {
   const [cameraReady, setCameraReady] = useState(false);
   const [currentWord, setCurrentWord] = useState('');
 
-  const { cameraEnabled, selectedDeviceId, translationFontSize } = useSettings();
+  const { cameraEnabled, setCameraEnabled, selectedDeviceId, translationFontSize } = useSettings();
 
   const { detectedLetter, confidence, motionGesture, motionConfidence, isReady } = useASLTranslation({
     videoRef: webcamRef,
@@ -106,7 +106,7 @@ export default function Dashboard() {
               ← Back
             </button>
             <button
-              style={{...styles.wordBtn, backgroundColor: '#ef4444'}}
+              style={{ ...styles.wordBtn, backgroundColor: '#ef4444' }}
               onClick={() => setCurrentWord('')}
               title="Clear word"
             >
@@ -139,8 +139,17 @@ export default function Dashboard() {
               )}
             </div>
           ) : (
+            /* Camera disabled — activate button from Dashboard1 */
             <div style={styles.disabledOverlay}>
-              Camera is disabled. Enable it in Settings ⚙
+              <button
+                style={styles.activateButton}
+                onClick={() => setCameraEnabled(true)}
+              >
+                Click to Activate Camera
+              </button>
+              <p style={styles.activateHint}>
+                You can also manage camera access in Settings ⚙
+              </p>
             </div>
           )}
         </div>
@@ -157,7 +166,7 @@ const styles = {
     flexDirection: "column",
     alignItems: "center",
     padding: "0 24px 16px 24px",
-    background: "linear-gradient(180deg, #0ea5e9 0%, #7dd3fc 40%, #ffffff 100%)",
+    background: "linear-gradient(180deg, #0ea5e9 0%, #7dd3fc 30%, #ffffff 65%, #ffffff 100%)",
     fontFamily: "'Poppins', sans-serif",
     boxSizing: "border-box",
   },
@@ -295,20 +304,37 @@ const styles = {
     left: "50%",
     transform: "translate(-50%, -50%)",
     fontSize: "16px",
-    color: "#6b9fd4",
+    color: "#ffffff",
     fontStyle: "italic",
   },
   disabledOverlay: {
     flex: 1,
     display: "flex",
+    flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: "15px",
-    color: "#6b9fd4",
-    fontStyle: "italic",
-    textAlign: "center",
+    gap: "14px",
     borderRadius: "10px",
     backgroundColor: "rgba(0,0,0,0.04)",
+  },
+  activateButton: {
+    padding: "14px 32px",
+    fontSize: "15px",
+    fontWeight: "600",
+    backgroundColor: "#0ea5e9",
+    color: "#ffffff",
+    border: "none",
+    borderRadius: "30px",
+    cursor: "pointer",
+    fontFamily: "'Poppins', sans-serif",
+    letterSpacing: "0.4px",
+    boxShadow: "0 4px 14px rgba(14,165,233,0.4)",
+  },
+  activateHint: {
+    fontSize: "13px",
+    color: "#6b9fd4",
+    fontStyle: "italic",
+    margin: 0,
   },
   panelLabel: {
     margin: "0 0 10px 0",
