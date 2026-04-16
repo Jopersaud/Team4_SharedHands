@@ -1,8 +1,3 @@
-"""
-Rebuilds asl_model.keras from its raw weights and converts to TF.js format.
-Run from the artifacts/ directory:
-    python rebuild_and_convert.py
-"""
 import os
 import io
 import zipfile

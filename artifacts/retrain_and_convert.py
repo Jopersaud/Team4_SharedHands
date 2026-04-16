@@ -1,8 +1,3 @@
-"""
-Step 2+3: Retrain the ASL model on updated CSV, then convert to TF.js.
-Run after add_dataset.py completes:
-    python retrain_and_convert.py
-"""
 import os
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 

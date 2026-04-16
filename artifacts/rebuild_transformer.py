@@ -1,8 +1,3 @@
-"""
-Rebuilds asl_transformer.keras from raw weights and converts to TF.js format.
-Run from the artifacts/ directory:
-    python rebuild_transformer.py
-"""
 import os, io, zipfile
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 import numpy as np
