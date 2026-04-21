@@ -1,9 +1,11 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
+import { useAuth } from "../context/AuthContext";
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const { isLoggedIn, currentUser, logout } = useAuth();
 
   // Inject Google Font
   useEffect(() => {
@@ -13,32 +15,63 @@ export default function HomePage() {
     document.head.appendChild(link);
   }, []);
 
+  const handleLogout = async () => {
+    await logout();
+    navigate("/");
+  };
+
   return (
     <div style={styles.page}>
       <Navbar />
 
       <div style={styles.body}>
-        {/* Welcome text */}
-        <div style={styles.heroText}>
-          <p style={styles.welcomeLine}>Welcome to</p>
-          <p style={styles.appName}>SharedHands</p>
-        </div>
-
-        {/* Buttons */}
-        <div style={styles.buttonRow}>
-          <button
-            style={styles.primaryButton}
-            onClick={() => navigate("/register")}
-          >
-            Create Account
-          </button>
-          <button
-            style={styles.secondaryButton}
-            onClick={() => navigate("/login")}
-          >
-            Login
-          </button>
-        </div>
+        {isLoggedIn ? (
+          /* ── Logged-in view ── */
+          <>
+            <div style={styles.heroText}>
+              <p style={styles.welcomeLine}>Welcome back,</p>
+              <p style={styles.appName}>
+                {currentUser?.username || currentUser?.email || "User"}
+              </p>
+            </div>
+            <div style={styles.buttonRow}>
+              <button
+                style={styles.primaryButton}
+                onClick={() => navigate("/dashboard")}
+              >
+                Go to Dashboard
+              </button>
+              <button
+                style={styles.secondaryButton}
+                onClick={handleLogout}
+              >
+                Log Out
+              </button>
+            </div>
+          </>
+        ) : (
+          /* ── Guest view ── */
+          <>
+            <div style={styles.heroText}>
+              <p style={styles.welcomeLine}>Welcome to</p>
+              <p style={styles.appName}>SharedHands</p>
+            </div>
+            <div style={styles.buttonRow}>
+              <button
+                style={styles.primaryButton}
+                onClick={() => navigate("/register")}
+              >
+                Create Account
+              </button>
+              <button
+                style={styles.secondaryButton}
+                onClick={() => navigate("/login")}
+              >
+                Login
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
