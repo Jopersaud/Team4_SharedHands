@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
+import { useAuth } from "../context/AuthContext";
 
-import { auth } from "../firebaseConfig";
-import { signInWithEmailAndPassword } from "firebase/auth";
+// ⚠️ TEMPORARY — Firebase removed for testing. Replace with full version when firebaseConfig is available.
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -22,32 +23,33 @@ export default function LoginPage() {
     e.preventDefault();
 
     try {
-      // Step 1: Sign in with Firebase
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      const uid = user.uid;
+      // ⚠️ TEMPORARY — skipping Firebase, using a mock uid for testing
+      const mockUid = "Q1I8KuL2iiY2gogzRE3O5DRWZ392";
 
-      // Step 2: Send UID to your backend
       const response = await fetch("/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ uid }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uid: mockUid }),
       });
 
       const data = await response.json();
 
       if (data.success) {
-        // Optionally, store user data in context or local storage
-        console.log("Backend login successful:", data.user);
+        login(data.user);
         navigate("/dashboard");
       } else {
         alert("Backend login failed: " + data.error);
       }
     } catch (error) {
-      console.error("Firebase or backend login error:", error);
-      alert("Login failed: " + error.message);
+      console.error("Backend login error:", error);
+      // ⚠️ TEMPORARY — if backend is also unavailable, log in with mock user directly
+      login({
+        uid: "Q1I8KuL2iiY2gogzRE3O5DRWZ392",
+        email: email || "crazybatman1815@gmail.com",
+        accountStatus: "active",
+        subscriptionTier: "free",
+      });
+      navigate("/dashboard");
     }
   };
 
@@ -57,6 +59,8 @@ export default function LoginPage() {
       <div style={styles.centered}>
         <div style={styles.card}>
           <h2 style={styles.title}>Login</h2>
+          {/* Temporary notice */}
+          <p style={styles.tempNotice}>⚠️ Firebase temporarily disabled — any credentials will work</p>
           <form onSubmit={handleLogin} style={styles.form}>
             <input
               type="email"
@@ -95,7 +99,7 @@ const styles = {
     flexDirection: "column",
     alignItems: "center",
     padding: "0 24px 16px 24px",
-   background: "linear-gradient(180deg, #0ea5e9 0%, #7dd3fc 30%, #ffffff 65%, #ffffff 100%)",
+    background: "linear-gradient(180deg, #0ea5e9 0%, #7dd3fc 30%, #ffffff 65%, #ffffff 100%)",
     fontFamily: "'Poppins', sans-serif",
     boxSizing: "border-box",
   },
@@ -115,11 +119,17 @@ const styles = {
     textAlign: "center",
   },
   title: {
-    margin: "0 0 24px 0",
+    margin: "0 0 8px 0",
     fontSize: "22px",
     fontWeight: "600",
     color: "#1e3a8a",
     letterSpacing: "0.5px",
+  },
+  tempNotice: {
+    fontSize: "11px",
+    color: "#f59e0b",
+    fontStyle: "italic",
+    margin: "0 0 16px 0",
   },
   form: {
     display: "flex",

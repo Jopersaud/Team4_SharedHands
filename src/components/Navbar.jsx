@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSettings } from "../context/SettingsContext";
+import { useAuth } from "../context/AuthContext";
 
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -14,13 +15,21 @@ export default function Navbar() {
     translationFontSize, setTranslationFontSize,
   } = useSettings();
 
+  const { isLoggedIn, currentUser, logout } = useAuth();
+
   const links = [
-    { label: "HomePage", path: "/" },
+    { label: "Home", path: "/" },
     { label: "Login", path: "/login" },
     { label: "Register", path: "/register" },
     { label: "Dashboard", path: "/dashboard" },
     // Add new pages here
   ];
+
+  const handleLogout = async () => {
+    await logout();
+    setMenuOpen(false);
+    navigate("/");
+  };
 
   return (
     <>
@@ -38,9 +47,16 @@ export default function Navbar() {
 
         <span style={styles.navTitle}>Translation App</span>
 
+        {/* Show username if logged in */}
+        {isLoggedIn && currentUser && (
+          <span style={styles.userLabel}>
+            {currentUser.username || currentUser.email}
+          </span>
+        )}
+
         {/* Gear icon — right-justified */}
         <button
-          style={{ ...styles.iconButton, marginLeft: "auto", fontSize: "20px", width: "auto", height: "auto", padding: "2px 4px" }}
+          style={{ ...styles.iconButton, marginLeft: isLoggedIn ? "12px" : "auto", fontSize: "20px", width: "auto", height: "auto", padding: "2px 4px" }}
           onClick={() => { setSettingsOpen(!settingsOpen); setMenuOpen(false); }}
           aria-label="Settings"
         >
@@ -59,11 +75,20 @@ export default function Navbar() {
                 {link.label}
               </button>
             ))}
+            {/* Logout button — only shown when logged in */}
+            {isLoggedIn && (
+              <button
+                style={{ ...styles.dropdownItem, color: "#fca5a5" }}
+                onClick={handleLogout}
+              >
+                Log Out
+              </button>
+            )}
           </div>
         )}
       </div>
 
-      {/* Settings overlay — clicking outside closes the drawer */}
+      {/* Settings overlay */}
       {settingsOpen && (
         <div
           style={styles.overlay}
@@ -85,7 +110,6 @@ export default function Navbar() {
         <div style={styles.section}>
           <p style={styles.sectionTitle}>Camera</p>
 
-          {/* Camera toggle */}
           <div style={styles.settingRow}>
             <span style={styles.settingLabel}>Camera Access</span>
             <button
@@ -102,7 +126,6 @@ export default function Navbar() {
             </button>
           </div>
 
-          {/* Camera selection — only shown if multiple cameras exist */}
           {availableDevices.length > 1 && (
             <div style={styles.settingColumn}>
               <span style={styles.settingLabel}>Select Camera</span>
@@ -149,12 +172,27 @@ export default function Navbar() {
             </div>
           </div>
 
-          {/* Preview */}
           <div style={styles.preview}>
             <span style={{ fontSize: `${translationFontSize * 0.4}px`, fontWeight: "600", color: "#1e3a8a" }}>A</span>
             <span style={styles.previewLabel}>Preview</span>
           </div>
         </div>
+
+        {/* Account section — only shown when logged in */}
+        {isLoggedIn && (
+          <div style={styles.section}>
+            <p style={styles.sectionTitle}>Account</p>
+            <p style={styles.settingLabel}>
+              Signed in as {currentUser?.username || currentUser?.email}
+            </p>
+            <button
+              style={styles.logoutButton}
+              onClick={handleLogout}
+            >
+              Log Out
+            </button>
+          </div>
+        )}
       </div>
     </>
   );
@@ -200,6 +238,14 @@ const styles = {
     letterSpacing: "0.5px",
     fontFamily: "'Poppins', sans-serif",
   },
+  userLabel: {
+    marginLeft: "auto",
+    fontSize: "13px",
+    fontWeight: "500",
+    color: "rgba(255,255,255,0.85)",
+    fontFamily: "'Poppins', sans-serif",
+    letterSpacing: "0.3px",
+  },
   dropdown: {
     position: "absolute",
     top: "100%",
@@ -225,16 +271,12 @@ const styles = {
     cursor: "pointer",
     textAlign: "left",
   },
-
-  /* Overlay */
   overlay: {
     position: "fixed",
     inset: 0,
     backgroundColor: "rgba(0,0,0,0.3)",
     zIndex: 150,
   },
-
-  /* Settings drawer */
   drawer: {
     position: "fixed",
     top: 0,
@@ -249,6 +291,7 @@ const styles = {
     transition: "transform 0.3s ease",
     fontFamily: "'Poppins', sans-serif",
     overflowY: "auto",
+    borderRadius: "20px 0px 0px 20px",
   },
   drawerHeader: {
     display: "flex",
@@ -271,8 +314,6 @@ const styles = {
     cursor: "pointer",
     padding: "2px 6px",
   },
-
-  /* Sections */
   section: {
     padding: "20px",
     borderBottom: "1px solid rgba(255,255,255,0.1)",
@@ -313,8 +354,6 @@ const styles = {
     fontStyle: "italic",
     margin: "4px 0 0 0",
   },
-
-  /* Toggle switch */
   toggle: {
     width: "46px",
     height: "26px",
@@ -336,8 +375,6 @@ const styles = {
     backgroundColor: "#ffffff",
     transition: "transform 0.2s",
   },
-
-  /* Camera select */
   select: {
     width: "100%",
     padding: "8px 10px",
@@ -350,8 +387,6 @@ const styles = {
     cursor: "pointer",
     outline: "none",
   },
-
-  /* Font size slider */
   slider: {
     width: "100%",
     accentColor: "#6ee7b7",
@@ -363,8 +398,6 @@ const styles = {
     fontSize: "11px",
     color: "#94a3b8",
   },
-
-  /* Preview box */
   preview: {
     backgroundColor: "#dbeafe",
     borderRadius: "10px",
@@ -380,5 +413,18 @@ const styles = {
     color: "#94a3b8",
     textTransform: "uppercase",
     letterSpacing: "0.8px",
+  },
+  logoutButton: {
+    marginTop: "12px",
+    width: "100%",
+    padding: "10px",
+    fontSize: "14px",
+    fontWeight: "600",
+    backgroundColor: "rgba(239,68,68,0.2)",
+    color: "#fca5a5",
+    border: "1px solid rgba(239,68,68,0.3)",
+    borderRadius: "10px",
+    cursor: "pointer",
+    fontFamily: "'Poppins', sans-serif",
   },
 };
