@@ -21,3 +21,13 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Secrets and credentials
+SharedHandsAdminKey.json
+src/firebaseConfig.js
+
+# Large ML artifacts
+artifacts/asl_landmarks.csv
+artifacts/archive*/
+artifacts/*.keras
+artifacts/*.npy
