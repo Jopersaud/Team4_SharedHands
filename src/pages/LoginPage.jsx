@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
-
 import { auth } from "../firebaseConfig";
 import { signInWithEmailAndPassword } from "firebase/auth";
+import { useAuth } from "../context/AuthContext";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -22,31 +23,28 @@ export default function LoginPage() {
     e.preventDefault();
 
     try {
-      // Step 1: Sign in with Firebase
+      // Step 1: Sign in with Firebase using real credentials
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      const uid = user.uid;
+      const uid = userCredential.user.uid;
 
-      // Step 2: Send UID to your backend
+      // Step 2: Send uid to Flask to get full Firestore profile
       const response = await fetch("/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ uid }),
       });
 
       const data = await response.json();
 
       if (data.success) {
-        // Optionally, store user data in context or local storage
-        console.log("Backend login successful:", data.user);
+        // Step 3: Store the real user profile in AuthContext
+        login(data.user);
         navigate("/dashboard");
       } else {
         alert("Backend login failed: " + data.error);
       }
     } catch (error) {
-      console.error("Firebase or backend login error:", error);
+      console.error("Login error:", error);
       alert("Login failed: " + error.message);
     }
   };
@@ -95,7 +93,7 @@ const styles = {
     flexDirection: "column",
     alignItems: "center",
     padding: "0 24px 16px 24px",
-    background: "linear-gradient(180deg, #0ea5e9 0%, #38bdf8 50%, #7dd3fc 100%)",
+    background: "linear-gradient(180deg, #0ea5e9 0%, #7dd3fc 30%, #ffffff 65%, #ffffff 100%)",
     fontFamily: "'Poppins', sans-serif",
     boxSizing: "border-box",
   },

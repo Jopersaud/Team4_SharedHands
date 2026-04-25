@@ -35,9 +35,7 @@ export default function RegisterPage() {
     try {
       const response = await fetch("/register", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           username: formData.username,
           email: formData.email,
@@ -48,8 +46,9 @@ export default function RegisterPage() {
       const data = await response.json();
 
       if (data.success) {
-        alert("Account created successfully!");
-        navigate("/");
+        alert("Account created successfully! Please log in.");
+        // Backend does not auto-login so redirect to /login
+        navigate("/login");
       } else {
         alert("Error creating account: " + data.error);
       }
@@ -118,7 +117,7 @@ const styles = {
     flexDirection: "column",
     alignItems: "center",
     padding: "0 24px 16px 24px",
-    background: "linear-gradient(180deg, #0ea5e9 0%, #38bdf8 50%, #7dd3fc 100%)",
+    background: "linear-gradient(180deg, #0ea5e9 0%, #7dd3fc 30%, #ffffff 65%, #ffffff 100%)",
     fontFamily: "'Poppins', sans-serif",
     boxSizing: "border-box",
   },

@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
+import logo from "../assets/SharedHandsLogoNoText.png";
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -26,47 +27,35 @@ export default function HomePage() {
 
       <div style={styles.body}>
         {isLoggedIn ? (
-          /* ── Logged-in view ── */
           <>
-            <div style={styles.heroText}>
+            <div style={styles.heroSection}>
               <p style={styles.welcomeLine}>Welcome back,</p>
               <p style={styles.appName}>
                 {currentUser?.username || currentUser?.email || "User"}
               </p>
+              <img src={logo} alt="SharedHands Logo" style={styles.logo} />
             </div>
             <div style={styles.buttonRow}>
-              <button
-                style={styles.primaryButton}
-                onClick={() => navigate("/dashboard")}
-              >
+              <button style={styles.primaryButton} onClick={() => navigate("/dashboard")}>
                 Go to Dashboard
               </button>
-              <button
-                style={styles.secondaryButton}
-                onClick={handleLogout}
-              >
+              <button style={styles.secondaryButton} onClick={handleLogout}>
                 Log Out
               </button>
             </div>
           </>
         ) : (
-          /* ── Guest view ── */
           <>
-            <div style={styles.heroText}>
+            <div style={styles.heroSection}>
               <p style={styles.welcomeLine}>Welcome to</p>
               <p style={styles.appName}>SharedHands</p>
+              <img src={logo} alt="SharedHands Logo" style={styles.logo} />
             </div>
             <div style={styles.buttonRow}>
-              <button
-                style={styles.primaryButton}
-                onClick={() => navigate("/register")}
-              >
+              <button style={styles.primaryButton} onClick={() => navigate("/register")}>
                 Create Account
               </button>
-              <button
-                style={styles.secondaryButton}
-                onClick={() => navigate("/login")}
-              >
+              <button style={styles.secondaryButton} onClick={() => navigate("/login")}>
                 Login
               </button>
             </div>
@@ -99,9 +88,18 @@ const styles = {
     width: "100%",
     maxWidth: "1400px",
   },
-  heroText: {
-    marginTop: "80px",
-    textAlign: "center",
+  heroSection: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    marginTop: "40px",
+    gap: "8px",
+  },
+  logo: {
+    width: "380px",
+    height: "auto",
+    mixBlendMode: "multiply",
+    marginTop: "12px",
   },
   welcomeLine: {
     margin: 0,
@@ -110,7 +108,7 @@ const styles = {
     color: "#1e3a8a",
   },
   appName: {
-    margin: "6px 0 0 0",
+    margin: 0,
     fontSize: "48px",
     fontWeight: "700",
     color: "#1e3a8a",

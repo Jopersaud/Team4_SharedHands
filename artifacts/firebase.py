@@ -10,7 +10,7 @@ from datetime import datetime
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-cred = credentials.Certificate("/Users/josh/SPR2026/CIS454/SharedHands/SharedHandsAdminKey.json")  
+cred = credentials.Certificate("../SharedHandsAdminKey.json")  
 
 firebase_admin.initialize_app(cred, {
     'storageBucket': 'sharedhands-f232b.appspot.com'
